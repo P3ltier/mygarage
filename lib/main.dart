@@ -360,17 +360,19 @@ class KartuRiwayat extends StatelessWidget {
 // ============================================================
 // Data awal (data simulasi, sesuai wireframe)
 // ============================================================
+// Demo indikator MERAH: SEMUA tanggal harus >= 3 bulan dari hari ini,
+// karena indikator membaca tanggal servis yang PALING BARU.
 final List<CatatanServis> seedDefault = [
   CatatanServis(
       jenis: 'Ganti Oli Mesin',
-      tanggal: DateTime(2026, 7, 12), // demo merah: sudah 3+ bulan
+      tanggal: DateTime(2026, 7, 12), // paling baru: sudah 3 bulan
       biaya: 250000),
   CatatanServis(
       jenis: 'Balancing Ban',
-      tanggal: DateTime(2026, 9, 28),
+      tanggal: DateTime(2026, 6, 20),
       biaya: 100000),
   CatatanServis(
-      jenis: 'Ganti Aki', tanggal: DateTime(2026, 9, 5), biaya: 900000),
+      jenis: 'Ganti Aki', tanggal: DateTime(2026, 5, 5), biaya: 900000),
 ];
 
 // ============================================================

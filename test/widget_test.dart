@@ -96,6 +96,26 @@ void main() {
     });
   });
 
+  group('Unit test statusPengingat (K4 — ambang 3 bulan)', () {
+    test('data terakhir >= 3 bulan → MERAH waktunya servis', () {
+      final (merah, ket) =
+          statusPengingat(DateTime(2026, 7, 12), DateTime(2026, 11, 2));
+      expect(merah, isTrue);
+      expect(ket, 'Terakhir: 12 Jul 2026 — sudah 3 bulan');
+    });
+    test('data terakhir < 3 bulan → HIJAU sudah servis', () {
+      final (merah, ket) =
+          statusPengingat(DateTime(2026, 10, 12), DateTime(2026, 11, 2));
+      expect(merah, isFalse);
+      expect(ket, 'Servis terakhir: 12 Okt 2026');
+    });
+    test('tidak ada data → MERAH belum ada catatan', () {
+      final (merah, ket) = statusPengingat(null, DateTime(2026, 11, 2));
+      expect(merah, isTrue);
+      expect(ket, 'Belum ada catatan servis');
+    });
+  });
+
   group('Widget test — form Tambah Catatan Servis (frame Figma H3)', () {
     Future<void> bukaDanIsi(WidgetTester tester,
         {String jenis = '', String biaya = ''}) async {
