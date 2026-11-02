@@ -363,7 +363,7 @@ class KartuRiwayat extends StatelessWidget {
 final List<CatatanServis> seedDefault = [
   CatatanServis(
       jenis: 'Ganti Oli Mesin',
-      tanggal: DateTime(2026, 10, 12),
+      tanggal: DateTime(2026, 7, 12), // demo merah: sudah 3+ bulan
       biaya: 250000),
   CatatanServis(
       jenis: 'Balancing Ban',
