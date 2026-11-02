@@ -52,7 +52,8 @@ String formatRupiah(int n) => 'Rp ${_titikRibuan(n)}';
 String formatKilometer(int n) => _titikRibuan(n);
 
 /// Aturan validasi catatan servis (urutan sesuai form):
-/// jenis wajib → biaya wajib → angka > 0 → maksimal Rp 500.000.
+/// jenis wajib → biaya wajib → angka > 0.
+/// Biaya servis tidak diberi plafon — nilai uang nyata tidak dibatasi.
 String? periksaCatatan(String jenis, String biayaRaw) {
   final jenisBersih = jenis.trim();
   if (jenisBersih.isEmpty) return 'Jenis perbaikan wajib diisi';
@@ -60,7 +61,6 @@ String? periksaCatatan(String jenis, String biayaRaw) {
   if (biayaStr.isEmpty) return 'Biaya wajib diisi';
   final biaya = double.tryParse(biayaStr);
   if (biaya == null || biaya <= 0) return 'Biaya harus angka lebih dari 0';
-  if (biaya > 500000) return 'Biaya maksimal Rp 500.000';
   return null;
 }
 
@@ -996,8 +996,7 @@ class _HalamanTambahCatatanState extends State<HalamanTambahCatatan> {
       final error = periksaCatatan(_jenis.text, _biaya.text);
       _galatJenis = error == 'Jenis perbaikan wajib diisi' ? error : null;
       _galatBiaya = (error == 'Biaya wajib diisi' ||
-              error == 'Biaya harus angka lebih dari 0' ||
-              error == 'Biaya maksimal Rp 500.000')
+              error == 'Biaya harus angka lebih dari 0')
           ? error
           : null;
       if (error != null) return; // tetap di form, persis frame kesalahan

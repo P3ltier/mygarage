@@ -62,12 +62,9 @@ void main() {
       expect(periksaCatatan('Ganti Oli', 'abc'),
           'Biaya harus angka lebih dari 0');
     });
-    test('biaya di atas Rp 500.000 ditolak', () {
-      expect(periksaCatatan('Ganti Oli', '500001'), 'Biaya maksimal Rp 500.000');
-    });
-    test('input tepat batas dan valid diterima', () {
-      expect(periksaCatatan('Ganti Oli', '500000'), isNull);
-      expect(periksaCatatan('Balancing Ban', '150000'), isNull);
+    test('biaya besar tanpa plafon diterima (servis nyata tidak dibatasi)', () {
+      expect(periksaCatatan('Ganti Aki', '900000'), isNull);
+      expect(periksaCatatan('Overhaul Mesin', '5000000'), isNull);
     });
   });
 
@@ -153,14 +150,16 @@ void main() {
       expect(find.text('Biaya harus angka lebih dari 0'), findsOneWidget);
     });
 
-    testWidgets('K07 biaya 500001 → pesan batas', (tester) async {
-      await bukaDanIsi(tester, jenis: 'Ganti Oli', biaya: '500001');
+    testWidgets('K07 biaya besar (900000) → tersimpan, tanpa plafon',
+        (tester) async {
+      await bukaDanIsi(tester, jenis: 'Ganti Aki', biaya: '900000');
       await tester.tap(find.byKey(const Key('simpan')));
       await tester.pumpAndSettle();
-      expect(find.text('Biaya maksimal Rp 500.000'), findsOneWidget);
+      expect(find.text('Tersimpan: Ganti Aki'), findsOneWidget);
+      expect(find.text('HOME'), findsOneWidget);
     });
 
-    testWidgets('K08 biaya 500000 (tepat batas) → tersimpan dan kembali',
+    testWidgets('K08 biaya 500000 → tersimpan dan kembali',
         (tester) async {
       await bukaDanIsi(tester, jenis: 'Ganti Oli', biaya: '500000');
       await tester.tap(find.byKey(const Key('simpan')));

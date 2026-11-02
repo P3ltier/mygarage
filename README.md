@@ -17,7 +17,7 @@ Pemilik kendaraan saat ini mengandalkan nota kertas yang mudah hilang dan ingata
 ## Fitur (MVP — sesuai MoSCoW worksheet Minggu 2)
 
 - **K1 — Login** (MUST): halaman masuk email + kata sandi dengan keadaan galat. *(Saat ini masih simulasi lokal; integrasi Firebase Authentication direncanakan Pertemuan 9.)*
-- **K2 — Tambah Catatan Servis** (MUST): form Nama Perbaikan, Tanggal (date picker), Kilometer, Biaya (Rp) — dengan validasi: jenis wajib, biaya wajib, biaya > 0, maksimal Rp 500.000.
+- **K2 — Tambah Catatan Servis** (MUST): form Nama Perbaikan, Tanggal (date picker), Kilometer, Biaya (Rp) — dengan validasi: jenis wajib, biaya wajib, biaya > 0 (tanpa plafon).
 - **K3 — Riwayat Servis** (MUST): daftar urut dari tanggal terbaru + keadaan kosong.
 - **K4 — Indikator Pengingat** (MUST): blok hijau/merah di Beranda berdasarkan tanggal servis terakhir.
 - **K5 — Responsif** (SHOULD): versi web memakai sidebar + tabel; versi mobile memakai bottom navigation + kartu.
