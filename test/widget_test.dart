@@ -1,0 +1,240 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:mygarage/main.dart';
+
+/// Harness: pumps a HOME screen that pushes the form, and records what the
+/// form returns. Lets the widget tests exercise HalamanTambahCatatan inside a
+/// real Navigator (Simpan pops with a CatatanServis; Batal pops with null).
+class _Harness extends StatefulWidget {
+  const _Harness();
+  @override
+  State<_Harness> createState() => _HarnessState();
+}
+
+class _HarnessState extends State<_Harness> {
+  String _result = '';
+
+  void _openForm() async {
+    final r = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const HalamanTambahCatatan()),
+    );
+    if (r is CatatanServis) {
+      setState(() => _result = 'Tersimpan: ${r.jenis}');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('HOME', key: Key('home')),
+            FilledButton(
+              key: const Key('open-form'),
+              onPressed: _openForm,
+              child: const Text('Open form'),
+            ),
+            if (_result.isNotEmpty) Text(_result, key: const Key('saved')),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+void main() {
+  group('Unit test aturan validasi (periksaCatatan)', () {
+    test('jenis kosong ditolak', () {
+      expect(periksaCatatan('', '50000'), 'Jenis perbaikan wajib diisi');
+    });
+    test('biaya kosong ditolak (sesuai frame Figma)', () {
+      expect(periksaCatatan('Ganti Oli', ''), 'Biaya wajib diisi');
+    });
+    test('biaya nol/negatif ditolak', () {
+      expect(periksaCatatan('Ganti Oli', '0'), 'Biaya harus angka lebih dari 0');
+      expect(periksaCatatan('Ganti Oli', '-1000'),
+          'Biaya harus angka lebih dari 0');
+    });
+    test('biaya bukan angka ditolak', () {
+      expect(periksaCatatan('Ganti Oli', 'abc'),
+          'Biaya harus angka lebih dari 0');
+    });
+    test('biaya di atas Rp 500.000 ditolak', () {
+      expect(periksaCatatan('Ganti Oli', '500001'), 'Biaya maksimal Rp 500.000');
+    });
+    test('input tepat batas dan valid diterima', () {
+      expect(periksaCatatan('Ganti Oli', '500000'), isNull);
+      expect(periksaCatatan('Balancing Ban', '150000'), isNull);
+    });
+  });
+
+  group('Login — frame "Login – Kesalahan"', () {
+    testWidgets('L01 kredensial salah menampilkan pesan dan tetap di Login',
+        (tester) async {
+      await tester.pumpWidget(const MyApp());
+      await tester.enterText(find.byKey(const Key('email')), 'user@example.com');
+      await tester.enterText(find.byKey(const Key('sandi')), 'short');
+      await tester.tap(find.byKey(const Key('masuk')));
+      await tester.pump();
+      expect(find.text('Email atau password salah'), findsNWidgets(2));
+      expect(find.text('Selamat Datang'), findsOneWidget); // masih di Login
+    });
+
+    testWidgets('L02 login valid → Beranda → tap Tambah Servis membuka form',
+        (tester) async {
+      await tester.pumpWidget(const MyApp());
+      await tester.enterText(
+          find.byKey(const Key('email')), 'aang@mygarage.id');
+      await tester.enterText(find.byKey(const Key('sandi')), 'rahasia123');
+      await tester.tap(find.byKey(const Key('masuk')));
+      await tester.pumpAndSettle();
+      expect(find.text('Tambah Servis'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('tambah')));
+      await tester.pumpAndSettle();
+      // Form harus terbuka (label kolom pertama terlihat)
+      expect(find.text('Nama Perbaikan'), findsOneWidget);
+    });
+  });
+
+  group('Widget test — form Tambah Catatan Servis (frame Figma H3)', () {
+    Future<void> bukaDanIsi(WidgetTester tester,
+        {String jenis = '', String biaya = ''}) async {
+      await tester.pumpWidget(const MaterialApp(home: _Harness()));
+      await tester.tap(find.byKey(const Key('open-form')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('jenis')), jenis);
+      await tester.enterText(find.byKey(const Key('biaya')), biaya);
+    }
+
+    testWidgets('K01 semua kosong → pesan jenis muncul', (tester) async {
+      await bukaDanIsi(tester);
+      await tester.tap(find.byKey(const Key('simpan')));
+      await tester.pumpAndSettle();
+      expect(find.text('Jenis perbaikan wajib diisi'), findsOneWidget);
+      expect(find.text('HOME'), findsNothing); // masih di form
+    });
+
+    testWidgets('K02 jenis kosong, biaya terisi → pesan jenis', (tester) async {
+      await bukaDanIsi(tester, biaya: '50000');
+      await tester.tap(find.byKey(const Key('simpan')));
+      await tester.pumpAndSettle();
+      expect(find.text('Jenis perbaikan wajib diisi'), findsOneWidget);
+    });
+
+    testWidgets('K03 jenis terisi, biaya kosong → pesan biaya (frame Figma)',
+        (tester) async {
+      await bukaDanIsi(tester, jenis: 'Ganti Oli');
+      await tester.tap(find.byKey(const Key('simpan')));
+      await tester.pumpAndSettle();
+      expect(find.text('Biaya wajib diisi'), findsOneWidget);
+    });
+
+    testWidgets('K04 biaya 0 → pesan biaya', (tester) async {
+      await bukaDanIsi(tester, jenis: 'Ganti Oli', biaya: '0');
+      await tester.tap(find.byKey(const Key('simpan')));
+      await tester.pumpAndSettle();
+      expect(find.text('Biaya harus angka lebih dari 0'), findsOneWidget);
+    });
+
+    testWidgets('K05 biaya negatif → pesan biaya', (tester) async {
+      await bukaDanIsi(tester, jenis: 'Ganti Oli', biaya: '-1000');
+      await tester.tap(find.byKey(const Key('simpan')));
+      await tester.pumpAndSettle();
+      expect(find.text('Biaya harus angka lebih dari 0'), findsOneWidget);
+    });
+
+    testWidgets('K06 biaya huruf → pesan biaya', (tester) async {
+      await bukaDanIsi(tester, jenis: 'Ganti Oli', biaya: 'abc');
+      await tester.tap(find.byKey(const Key('simpan')));
+      await tester.pumpAndSettle();
+      expect(find.text('Biaya harus angka lebih dari 0'), findsOneWidget);
+    });
+
+    testWidgets('K07 biaya 500001 → pesan batas', (tester) async {
+      await bukaDanIsi(tester, jenis: 'Ganti Oli', biaya: '500001');
+      await tester.tap(find.byKey(const Key('simpan')));
+      await tester.pumpAndSettle();
+      expect(find.text('Biaya maksimal Rp 500.000'), findsOneWidget);
+    });
+
+    testWidgets('K08 biaya 500000 (tepat batas) → tersimpan dan kembali',
+        (tester) async {
+      await bukaDanIsi(tester, jenis: 'Ganti Oli', biaya: '500000');
+      await tester.tap(find.byKey(const Key('simpan')));
+      await tester.pumpAndSettle();
+      expect(find.text('Tersimpan: Ganti Oli'), findsOneWidget);
+      expect(find.text('HOME'), findsOneWidget);
+    });
+
+    testWidgets('K09 biaya 150000 → tersimpan', (tester) async {
+      await bukaDanIsi(tester, jenis: 'Balancing Ban', biaya: '150000');
+      await tester.tap(find.byKey(const Key('simpan')));
+      await tester.pumpAndSettle();
+      expect(find.text('Tersimpan: Balancing Ban'), findsOneWidget);
+    });
+
+    testWidgets('K10 jenis dengan spasi saja → pesan jenis', (tester) async {
+      await bukaDanIsi(tester, jenis: '   ', biaya: '50000');
+      await tester.tap(find.byKey(const Key('simpan')));
+      await tester.pumpAndSettle();
+      expect(find.text('Jenis perbaikan wajib diisi'), findsOneWidget);
+    });
+
+    testWidgets('K11 Batal → kembali tanpa menyimpan', (tester) async {
+      await bukaDanIsi(tester, jenis: 'Ganti Oli', biaya: '50000');
+      await tester.tap(find.byKey(const Key('batal')));
+      await tester.pumpAndSettle();
+      expect(find.text('HOME'), findsOneWidget);
+      expect(find.byKey(const Key('saved')), findsNothing);
+    });
+
+    testWidgets('K12 mode Ubah: form terisi data lama, Simpan mengembalikan '
+        'catatan yang diperbarui dengan id sama', (tester) async {
+      final lama = CatatanServis(
+          jenis: 'Ganti Oli Mesin',
+          tanggal: DateTime(2026, 10, 12),
+          biaya: 250000,
+          id: 42);
+      CatatanServis? hasil;
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Builder(
+              builder: (ctx) => FilledButton(
+                key: const Key('open-edit'),
+                onPressed: () async {
+                  final r = await Navigator.push(
+                    ctx,
+                    MaterialPageRoute(
+                        builder: (_) => HalamanTambahCatatan(edit: lama)),
+                  );
+                  if (r is CatatanServis) hasil = r;
+                },
+                child: const Text('Open edit'),
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.tap(find.byKey(const Key('open-edit')));
+      await tester.pumpAndSettle();
+      // Data lama terisi di form
+      expect(find.text('Ubah Catatan Servis'), findsOneWidget);
+      final jenisField = tester.widget<TextField>(find.byKey(const Key('jenis')));
+      final biayaField = tester.widget<TextField>(find.byKey(const Key('biaya')));
+      expect(jenisField.controller!.text, 'Ganti Oli Mesin');
+      expect(biayaField.controller!.text, '250000');
+      // Ubah biaya lalu simpan
+      await tester.enterText(find.byKey(const Key('biaya')), '300000');
+      await tester.tap(find.byKey(const Key('simpan')));
+      await tester.pumpAndSettle();
+      expect(hasil, isNotNull);
+      expect(hasil!.id, 42); // identitas catatan tetap
+      expect(hasil!.biaya, 300000);
+      expect(hasil!.jenis, 'Ganti Oli Mesin');
+    });
+  });
+}
