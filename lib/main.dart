@@ -110,7 +110,7 @@ class MyAppBar extends StatelessWidget implements PreferredSizeWidget {
           : null,
       centerTitle: false,
       title: Text(judul,
-          style: const TextStyle(
+          style: const TextStyle(fontFamily: 'Roboto', 
               fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
     );
   }
@@ -163,7 +163,7 @@ class InputField extends StatelessWidget {
           children: [
             Expanded(
               child: Text(label,
-                  style: const TextStyle(
+                  style: const TextStyle(fontFamily: 'Roboto', 
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: kTeksUtama)),
@@ -226,7 +226,7 @@ class TombolUtama extends StatelessWidget {
           backgroundColor: kPrimer,
           foregroundColor: Colors.white,
           textStyle:
-              const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              const TextStyle(fontFamily: 'Roboto', fontSize: 14, fontWeight: FontWeight.w600),
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadius)),
         ),
@@ -253,7 +253,7 @@ class TombolSekunder extends StatelessWidget {
           foregroundColor: kPrimer,
           side: const BorderSide(color: kPrimer, width: 2),
           textStyle:
-              const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              const TextStyle(fontFamily: 'Roboto', fontSize: 14, fontWeight: FontWeight.w600),
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadius)),
         ),
@@ -317,7 +317,7 @@ class KartuRiwayat extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(catatan.jenis,
-                        style: const TextStyle(
+                        style: const TextStyle(fontFamily: 'Roboto', 
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                             color: kTeksUtama)),
@@ -329,7 +329,7 @@ class KartuRiwayat extends StatelessWidget {
                 ),
               ),
               Text(formatRupiah(catatan.biaya),
-                  style: const TextStyle(
+                  style: const TextStyle(fontFamily: 'Roboto', 
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: kTeksUtama)),
@@ -342,7 +342,7 @@ class KartuRiwayat extends StatelessWidget {
               style: OutlinedButton.styleFrom(
                 foregroundColor: kPrimer,
                 side: const BorderSide(color: kPrimer, width: 2),
-                textStyle: const TextStyle(
+                textStyle: const TextStyle(fontFamily: 'Roboto', 
                     fontSize: 14, fontWeight: FontWeight.w600),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(kRadius)),
@@ -478,7 +478,7 @@ class _MyAppState extends State<MyApp> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text('MyGarage',
-                      style: TextStyle(
+                      style: TextStyle(fontFamily: 'Roboto', 
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
                           color: kPrimer)),
@@ -607,7 +607,7 @@ class _HalamanLoginState extends State<HalamanLogin> {
             trailing: GestureDetector(
               onTap: () {},
               child: const Text('Lupa kata sandi?',
-                  style: TextStyle(
+                  style: TextStyle(fontFamily: 'Roboto', 
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: kPrimer)),
@@ -623,7 +623,7 @@ class _HalamanLoginState extends State<HalamanLogin> {
               Text('Belum punya akun? ',
                   style: TextStyle(fontSize: 14, color: kTeksSekunder)),
               Text('Daftar sekarang',
-                  style: TextStyle(
+                  style: TextStyle(fontFamily: 'Roboto', 
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: kPrimer)),
@@ -705,7 +705,7 @@ class KontenBeranda extends StatelessWidget {
             alignment: Alignment.center,
             child: Text(
               waktunya ? 'Waktunya Servis' : 'Sudah Servis',
-              style: const TextStyle(
+              style: const TextStyle(fontFamily: 'Roboto', 
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: Colors.white),
@@ -750,7 +750,7 @@ class KontenBeranda extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const Text('Servis Terbaru',
-                          style: TextStyle(
+                          style: TextStyle(fontFamily: 'Roboto', 
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
                               color: kTeksUtama)),
@@ -770,7 +770,7 @@ class KontenBeranda extends StatelessWidget {
                                       fontSize: 12, color: kTeksSekunder)),
                               const SizedBox(width: kJarakM),
                               Text(formatRupiah(c.biaya),
-                                  style: const TextStyle(
+                                  style: const TextStyle(fontFamily: 'Roboto', 
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
                                       color: kTeksUtama)),
@@ -828,7 +828,7 @@ class KontenRiwayat extends StatelessWidget {
                 size: 48, color: kTeksSekunder),
             const SizedBox(height: kJarakM),
             const Text('Belum ada catatan servis',
-                style: TextStyle(
+                style: TextStyle(fontFamily: 'Roboto', 
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
                     color: kTeksUtama)),
@@ -926,7 +926,7 @@ class _SelHeader extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.all(kJarakS),
         child: Text(teks,
-            style: const TextStyle(
+            style: const TextStyle(fontFamily: 'Roboto', 
                 fontSize: 14, fontWeight: FontWeight.w600, color: kTeksUtama)),
       );
 }
