@@ -62,6 +62,6 @@ Untuk melihat tampilan mobile di browser: Chrome -> F12 -> Toggle device toolbar
 ## Pengujian
 
 ```bash
-flutter test     # 20 kasus: 6 unit aturan validasi + 13 widget + 1 alur login
+flutter test     # 23 kasus: 8 unit (5 aturan validasi + 3 status pengingat) + 14 widget (12 form K01-K12 + 2 alur login) + 1 golden screenshot
 flutter analyze  # No issues found
 ```
