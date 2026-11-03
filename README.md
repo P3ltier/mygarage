@@ -14,9 +14,9 @@
 
 Pemilik kendaraan saat ini mengandalkan nota kertas yang mudah hilang dan ingatan untuk jadwal servis. Akibatnya perawatan telat dan biaya perbaikan membengkak. MyGarage menggantinya dengan buku servis digital: setiap selesai dari bengkel, pengguna mencatat jenis perbaikan, tanggal, kilometer, dan biaya — aplikasi menampilkan riwayat terurut dan indikator pengingat (hijau = sudah servis, merah = sudah ≥3 bulan sejak servis terakhir).
 
-## Fitur (MVP — sesuai MoSCoW worksheet Minggu 2)
+## Fitur (MVP)
 
-- **K1 — Login** (MUST): halaman masuk email + kata sandi dengan keadaan galat. *(Saat ini masih simulasi lokal; integrasi Firebase Authentication direncanakan Pertemuan 9.)*
+- **K1 — Login** (MUST): halaman masuk email + kata sandi dengan keadaan galat. *(Saat ini masih simulasi lokal; integrasi Firebase Authentication menyusul.)*
 - **K2 — Tambah Catatan Servis** (MUST): form Nama Perbaikan, Tanggal (date picker), Kilometer, Biaya (Rp) — dengan validasi: jenis wajib, biaya wajib, biaya > 0 (tanpa plafon).
 - **K3 — Riwayat Servis** (MUST): daftar urut dari tanggal terbaru + keadaan kosong.
 - **K4 — Indikator Pengingat** (MUST): blok hijau/merah di Beranda berdasarkan tanggal servis terakhir.
@@ -32,7 +32,7 @@ Pemilik kendaraan saat ini mengandalkan nota kertas yang mudah hilang dan ingata
 ## Tech stack
 
 - **Flutter + Dart** — UI dan logika (satu basis kode untuk Android & web)
-- **Firebase Spark (gratis)** — Authentication (email/password), Cloud Firestore (data), Hosting (versi web) — *menyusul pada Pertemuan 9–10*
+- **Firebase Spark (gratis)** — Authentication (email/password), Cloud Firestore (data), Hosting (versi web) — *menyusul pada tahap berikutnya*
 - **Figma** — wireframe & style guide (#0D47A1 navy, Inter 24/18/14/12, radius 10, target sentuh 48 px)
 - **GitHub** — versi kode
 
