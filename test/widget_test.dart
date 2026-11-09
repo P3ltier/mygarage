@@ -126,6 +126,15 @@ void main() {
       expect(find.text('Password tidak sama'), findsOneWidget);
     });
 
+    testWidgets('L05 lupa kata sandi dengan email kosong → minta email, '
+        'tidak memanggil Firebase', (tester) async {
+      await tester.pumpWidget(const MyApp(sudahMasuk: false));
+      await tester.tap(find.byKey(const Key('lupa')));
+      await tester.pump();
+      expect(find.text('Email wajib diisi untuk reset kata sandi'),
+          findsOneWidget);
+    });
+
     testWidgets('L04 sudah masuk → Beranda, ada tombol Keluar, Tambah Servis '
         'membuka form', (tester) async {
       await tester.pumpWidget(const MyApp(sudahMasuk: true));

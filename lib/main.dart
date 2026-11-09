@@ -685,6 +685,34 @@ class _HalamanLoginState extends State<HalamanLogin> {
     }
   }
 
+  /// Lupa kata sandi: kirim tautan reset ke email di kolom Email.
+  Future<void> _lupaSandi() async {
+    final pesan = ScaffoldMessenger.of(context);
+    pesan.hideCurrentSnackBar();
+    final email = _email.text.trim();
+    final galat = validasiEmail(email);
+    if (galat != null) {
+      pesan.showSnackBar(SnackBar(
+          content: Text('$galat untuk reset kata sandi'),
+          backgroundColor: kMerah));
+      return;
+    }
+    setState(() => _sedangProses = true);
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      // Pesan netral: tidak membocorkan apakah email terdaftar.
+      pesan.showSnackBar(SnackBar(
+          content: Text(
+              'Jika $email terdaftar, tautan reset kata sandi sudah dikirim. '
+              'Cek kotak masuk atau folder spam.'),
+          backgroundColor: kHijau));
+    } on FirebaseAuthException catch (e) {
+      pesan.showSnackBar(SnackBar(
+          content: Text(pesanKesalahanAuth(e.code)), backgroundColor: kMerah));
+    }
+    if (mounted) setState(() => _sedangProses = false);
+  }
+
   void _gantiMode() {
     _formKey.currentState?.reset();
     _ulangi.clear();
@@ -727,15 +755,22 @@ class _HalamanLoginState extends State<HalamanLogin> {
               hint: 'Masukkan kata sandi',
               obscure: true,
               validator: validasiPassword,
-              // Sesuai frame Figma; fitur reset (pengayaan modul) belum dibuat.
               trailing: _modeDaftar
                   ? null
-                  : const Text('Lupa kata sandi?',
-                      style: TextStyle(
-                          fontFamily: 'Roboto',
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: kPrimer)),
+                  : TextButton(
+                      key: const Key('lupa'),
+                      onPressed: _sedangProses ? null : _lupaSandi,
+                      style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          minimumSize: const Size(48, 32),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                      child: const Text('Lupa kata sandi?',
+                          style: TextStyle(
+                              fontFamily: 'Roboto',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: kPrimer)),
+                    ),
             ),
             if (_modeDaftar) ...[
               const SizedBox(height: kJarakM),
