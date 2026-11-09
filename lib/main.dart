@@ -1,4 +1,8 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+
+import 'firebase_options.dart';
 
 // ============================================================
 // Style guide — dari Figma "2201650002 - MyGarage - Wireframe"
@@ -78,8 +82,52 @@ String? periksaCatatan(String jenis, String biayaRaw) {
   return (false, 'Servis terakhir: ${formatTanggal(terakhir)}');
 }
 
-void main() {
-  runApp(MyApp());
+// ============================================================
+// Validasi login + terjemahan kode error Firebase Auth
+// ============================================================
+String? validasiEmail(String? nilai) {
+  final email = nilai?.trim() ?? '';
+  if (email.isEmpty) return 'Email wajib diisi';
+  if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+    return 'Format email belum benar';
+  }
+  return null;
+}
+
+String? validasiPassword(String? nilai) {
+  if (nilai == null || nilai.isEmpty) return 'Password wajib diisi';
+  if (nilai.length < 6) return 'Password minimal 6 karakter';
+  return null;
+}
+
+String pesanKesalahanAuth(String kode) {
+  switch (kode) {
+    // Disamakan agar orang lain tidak bisa menebak email mana yang terdaftar.
+    case 'invalid-credential':
+    case 'wrong-password':
+    case 'user-not-found':
+      return 'Email atau password salah';
+    case 'invalid-email':
+      return 'Format email belum benar';
+    case 'email-already-in-use':
+      return 'Email sudah terdaftar. Silakan masuk.';
+    case 'weak-password':
+      return 'Password terlalu lemah, minimal 6 karakter';
+    case 'too-many-requests':
+      return 'Terlalu banyak percobaan. Coba lagi nanti.';
+    case 'network-request-failed':
+      return 'Tidak dapat terhubung. Periksa koneksi internet.';
+    case 'operation-not-allowed':
+      return 'Login email/password belum diaktifkan di Firebase Console';
+    default:
+      return 'Terjadi kesalahan. Silakan coba lagi.';
+  }
+}
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  runApp(const MyApp());
 }
 
 // ============================================================
@@ -88,9 +136,11 @@ void main() {
 
 /// App Bar Figma: navy, teks putih; varian dengan tombol kembali (←).
 class MyAppBar extends StatelessWidget implements PreferredSizeWidget {
-  const MyAppBar({super.key, required this.judul, this.tampilkanKembali = false});
+  const MyAppBar(
+      {super.key, required this.judul, this.tampilkanKembali = false, this.actions});
   final String judul;
   final bool tampilkanKembali;
+  final List<Widget>? actions;
 
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
@@ -109,6 +159,7 @@ class MyAppBar extends StatelessWidget implements PreferredSizeWidget {
             )
           : null,
       centerTitle: false,
+      actions: actions,
       title: Text(judul,
           style: const TextStyle(fontFamily: 'Roboto', 
               fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
@@ -133,6 +184,7 @@ class InputField extends StatelessWidget {
     this.onTap,
     this.obscure = false,
     this.trailing,
+    this.validator,
   });
 
   final Key? fieldKey;
@@ -147,6 +199,7 @@ class InputField extends StatelessWidget {
   final VoidCallback? onTap;
   final bool obscure;
   final Widget? trailing;
+  final FormFieldValidator<String>? validator;
 
   OutlineInputBorder _border(Color c, double w) => OutlineInputBorder(
         borderRadius: BorderRadius.circular(kRadius),
@@ -172,9 +225,10 @@ class InputField extends StatelessWidget {
           ],
         ),
         const SizedBox(height: kJarakS),
-        TextField(
+        TextFormField(
           key: fieldKey,
           controller: controller,
+          validator: validator,
           keyboardType: keyboardType,
           readOnly: readOnly,
           onTap: onTap,
@@ -188,6 +242,7 @@ class InputField extends StatelessWidget {
             hintStyle: const TextStyle(fontSize: 14, color: kTeksSekunder),
             prefixText: prefix,
             prefixStyle: const TextStyle(fontSize: 14, color: kTeksUtama),
+            errorStyle: const TextStyle(fontSize: 12, color: kMerah),
             filled: true,
             fillColor: kLatar,
             suffixIcon: suffixIcon,
@@ -215,7 +270,7 @@ class InputField extends StatelessWidget {
 class TombolUtama extends StatelessWidget {
   const TombolUtama({super.key, required this.label, required this.onPressed});
   final String label;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed; // null = tombol nonaktif
 
   @override
   Widget build(BuildContext context) {
@@ -379,8 +434,10 @@ final List<CatatanServis> seedDefault = [
 // MyApp — pemuatan state paling luar (login → shell 2 tab)
 // ============================================================
 class MyApp extends StatefulWidget {
-  const MyApp({super.key, this.seed});
+  const MyApp({super.key, this.seed, this.sudahMasuk});
   final List<CatatanServis>? seed;
+  /// Hanya untuk test: lewati Firebase (true = Beranda, false = Login).
+  final bool? sudahMasuk;
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -393,8 +450,12 @@ class _MyAppState extends State<MyApp> {
   final _scaffoldKey = GlobalKey<ScaffoldMessengerState>();
   late final List<CatatanServis> catatan =
       List.of(widget.seed ?? seedDefault);
-  bool _masuk = false;
   int _tab = 0;
+
+  void _keluar() {
+    _tab = 0;
+    FirebaseAuth.instance.signOut();
+  }
 
   void _bukaForm({CatatanServis? edit}) async {
     final hasil = await _navigatorKey.currentState!.push(
@@ -438,9 +499,25 @@ class _MyAppState extends State<MyApp> {
         scaffoldBackgroundColor: kLatar,
         useMaterial3: true,
       ),
-      home: !_masuk
-          ? HalamanLogin(onMasuk: () => setState(() => _masuk = true))
-          : _buildShell(),
+      home: switch (widget.sudahMasuk) {
+        true => _buildShell(),
+        false => const HalamanLogin(),
+        null => _cekStatusLogin(),
+      },
+    );
+  }
+
+  /// Cek status login: halaman mengikuti authStateChanges(), tanpa Navigator.
+  Widget _cekStatusLogin() {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+              body: Center(child: CircularProgressIndicator()));
+        }
+        return snapshot.hasData ? _buildShell() : const HalamanLogin();
+      },
     );
   }
 
@@ -456,7 +533,17 @@ class _MyAppState extends State<MyApp> {
       final bool mobile = kotak.maxWidth < 900;
       if (mobile) {
         return Scaffold(
-          appBar: MyAppBar(judul: _tab == 0 ? 'MyGarage' : 'Riwayat Servis'),
+          appBar: MyAppBar(
+            judul: _tab == 0 ? 'MyGarage' : 'Riwayat Servis',
+            actions: [
+              IconButton(
+                key: const Key('keluar'),
+                tooltip: 'Keluar',
+                icon: const Icon(Icons.logout),
+                onPressed: _keluar,
+              ),
+            ],
+          ),
           body: konten,
           bottomNavigationBar:
               BottomNavMyGarage(tab: _tab, gantiTab: (t) => setState(() => _tab = t)),
@@ -488,6 +575,8 @@ class _MyAppState extends State<MyApp> {
                   _menuWeb(Icons.receipt_long_outlined, 'Riwayat Servis',
                       _tab == 1, () => setState(() => _tab = 1)),
                   _menuWeb(Icons.person_outline, 'Profil', false, null),
+                  const Spacer(),
+                  _menuWeb(Icons.logout, 'Keluar', false, _keluar),
                 ],
               ),
             ),
@@ -548,88 +637,151 @@ class _MyAppState extends State<MyApp> {
 // H1 — LOGIN
 // ============================================================
 class HalamanLogin extends StatefulWidget {
-  const HalamanLogin({super.key, required this.onMasuk});
-  final VoidCallback onMasuk;
+  const HalamanLogin({super.key});
 
   @override
   State<HalamanLogin> createState() => _HalamanLoginState();
 }
 
+/// Satu halaman, dua mode (Masuk/Daftar). Berhasil masuk tidak memanggil
+/// Navigator: StreamBuilder di MyApp yang mengganti halaman.
 class _HalamanLoginState extends State<HalamanLogin> {
+  final _formKey = GlobalKey<FormState>();
   final _email = TextEditingController();
   final _sandi = TextEditingController();
-  String? _galat;
+  final _ulangi = TextEditingController();
+  bool _modeDaftar = false;
+  bool _sedangProses = false;
 
   @override
   void dispose() {
     _email.dispose();
     _sandi.dispose();
+    _ulangi.dispose();
     super.dispose();
   }
 
-  void _masuk() {
-    setState(() {
-      final ok = _email.text.trim().contains('@') && _sandi.text.length >= 6;
-      _galat = ok ? null : 'Email atau password salah';
-      if (ok) widget.onMasuk();
-    });
+  Future<void> _kirim() async {
+    if (!_formKey.currentState!.validate()) return;
+    final pesan = ScaffoldMessenger.of(context);
+    pesan.hideCurrentSnackBar();
+    setState(() => _sedangProses = true);
+    final email = _email.text.trim();
+    final password = _sandi.text;
+    try {
+      if (_modeDaftar) {
+        await FirebaseAuth.instance.createUserWithEmailAndPassword(
+            email: email, password: password);
+      } else {
+        await FirebaseAuth.instance.signInWithEmailAndPassword(
+            email: email, password: password);
+      }
+    } on FirebaseAuthException catch (e) {
+      pesan.showSnackBar(SnackBar(
+        content: Text(pesanKesalahanAuth(e.code)),
+        backgroundColor: kMerah,
+      ));
+      if (mounted) setState(() => _sedangProses = false);
+    }
+  }
+
+  void _gantiMode() {
+    _formKey.currentState?.reset();
+    _ulangi.clear();
+    setState(() => _modeDaftar = !_modeDaftar);
   }
 
   Widget _isi(double lebar) {
     return Container(
       width: lebar,
       padding: const EdgeInsets.all(kJarakM),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('Selamat Datang',
-              style: TextStyle(
-                  fontSize: 24, fontWeight: FontWeight.bold, color: kTeksUtama)),
-          const SizedBox(height: 4),
-          const Text('Masuk untuk mengelola catatan servis mobil Anda.',
-              style: TextStyle(fontSize: 14, color: kTeksSekunder)),
-          const SizedBox(height: kJarakL),
-          InputField(
-            fieldKey: const Key('email'),
-            controller: _email,
-            label: 'Email',
-            hint: 'nama@email.com',
-            pesanGalat: _galat,
-          ),
-          const SizedBox(height: kJarakM),
-          InputField(
-            fieldKey: const Key('sandi'),
-            controller: _sandi,
-            label: 'Kata Sandi',
-            hint: 'Masukkan kata sandi',
-            obscure: true,
-            trailing: GestureDetector(
-              onTap: () {},
-              child: const Text('Lupa kata sandi?',
-                  style: TextStyle(fontFamily: 'Roboto', 
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: kPrimer)),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_modeDaftar ? 'Buat Akun' : 'Selamat Datang',
+                style: const TextStyle(
+                    fontSize: 24, fontWeight: FontWeight.bold, color: kTeksUtama)),
+            const SizedBox(height: 4),
+            Text(
+                _modeDaftar
+                    ? 'Daftar untuk mulai mencatat servis mobil Anda.'
+                    : 'Masuk untuk mengelola catatan servis mobil Anda.',
+                style: const TextStyle(fontSize: 14, color: kTeksSekunder)),
+            const SizedBox(height: kJarakL),
+            InputField(
+              fieldKey: const Key('email'),
+              controller: _email,
+              label: 'Email',
+              hint: 'nama@email.com',
+              keyboardType: TextInputType.emailAddress,
+              validator: validasiEmail,
             ),
-            pesanGalat: _galat,
-          ),
-          const SizedBox(height: kJarakL),
-          TombolUtama(key: const Key('masuk'), label: 'Masuk', onPressed: _masuk),
-          const SizedBox(height: kJarakM),
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text('Belum punya akun? ',
-                  style: TextStyle(fontSize: 14, color: kTeksSekunder)),
-              Text('Daftar sekarang',
-                  style: TextStyle(fontFamily: 'Roboto', 
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: kPrimer)),
+            const SizedBox(height: kJarakM),
+            InputField(
+              fieldKey: const Key('sandi'),
+              controller: _sandi,
+              label: 'Kata Sandi',
+              hint: 'Masukkan kata sandi',
+              obscure: true,
+              validator: validasiPassword,
+              // Sesuai frame Figma; fitur reset (pengayaan modul) belum dibuat.
+              trailing: _modeDaftar
+                  ? null
+                  : const Text('Lupa kata sandi?',
+                      style: TextStyle(
+                          fontFamily: 'Roboto',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: kPrimer)),
+            ),
+            if (_modeDaftar) ...[
+              const SizedBox(height: kJarakM),
+              InputField(
+                fieldKey: const Key('ulangi'),
+                controller: _ulangi,
+                label: 'Ulangi Kata Sandi',
+                hint: 'Ketik ulang kata sandi',
+                obscure: true,
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Ulangi password';
+                  if (v != _sandi.text) return 'Password tidak sama';
+                  return null;
+                },
+              ),
             ],
-          ),
-        ],
+            const SizedBox(height: kJarakL),
+            if (_sedangProses)
+              const SizedBox(
+                  height: kTinggiTombol,
+                  child: Center(child: CircularProgressIndicator()))
+            else
+              TombolUtama(
+                  key: const Key('masuk'),
+                  label: _modeDaftar ? 'Daftar' : 'Masuk',
+                  onPressed: _kirim),
+            const SizedBox(height: kJarakM),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(_modeDaftar ? 'Sudah punya akun? ' : 'Belum punya akun? ',
+                    style: const TextStyle(fontSize: 14, color: kTeksSekunder)),
+                TextButton(
+                  key: const Key('ganti-mode'),
+                  onPressed: _sedangProses ? null : _gantiMode,
+                  child: Text(_modeDaftar ? 'Masuk' : 'Daftar sekarang',
+                      style: const TextStyle(
+                          fontFamily: 'Roboto',
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: kPrimer)),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

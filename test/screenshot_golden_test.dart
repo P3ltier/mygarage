@@ -42,16 +42,13 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(const MyApp());
+    await tester.pumpWidget(const MyApp(sudahMasuk: false));
     await tester.pumpAndSettle();
     await expectLater(
         find.byType(MaterialApp), matchesGoldenFile('goldens/login.png'));
 
-    // Login valid → Beranda (merah: seed 12 Jul 2026)
-    await tester.enterText(
-        find.byKey(const Key('email')), 'aang@mygarage.id');
-    await tester.enterText(find.byKey(const Key('sandi')), 'rahasia123');
-    await tester.tap(find.byKey(const Key('masuk')));
+    // Beranda (merah: seed 12 Jul 2026) — login asli butuh Firebase, dilewati
+    await tester.pumpWidget(const MyApp(sudahMasuk: true));
     await tester.pumpAndSettle();
     await expectLater(
         find.byType(MaterialApp), matchesGoldenFile('goldens/beranda.png'));

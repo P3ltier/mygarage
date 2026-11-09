@@ -68,30 +68,71 @@ void main() {
     });
   });
 
-  group('Login — frame "Login – Kesalahan"', () {
-    testWidgets('L01 kredensial salah menampilkan pesan dan tetap di Login',
+  group('Unit test validasi login + pesan kesalahan Firebase', () {
+    test('validasiEmail', () {
+      expect(validasiEmail(''), 'Email wajib diisi');
+      expect(validasiEmail('aang@'), 'Format email belum benar');
+      expect(validasiEmail('aang mygarage.id'), 'Format email belum benar');
+      expect(validasiEmail(' aang@mygarage.id '), isNull);
+    });
+    test('validasiPassword', () {
+      expect(validasiPassword(''), 'Password wajib diisi');
+      expect(validasiPassword('12345'), 'Password minimal 6 karakter');
+      expect(validasiPassword('123456'), isNull);
+    });
+    test('pesanKesalahanAuth tidak membocorkan email terdaftar', () {
+      for (final k in ['invalid-credential', 'wrong-password', 'user-not-found']) {
+        expect(pesanKesalahanAuth(k), 'Email atau password salah');
+      }
+      expect(pesanKesalahanAuth('email-already-in-use'),
+          'Email sudah terdaftar. Silakan masuk.');
+      expect(pesanKesalahanAuth('kode-asing'),
+          'Terjadi kesalahan. Silakan coba lagi.');
+    });
+  });
+
+  // Test tidak memanggil Firebase: MyApp(sudahMasuk: ...) melewati StreamBuilder.
+  group('Login — Form + validator', () {
+    testWidgets('L01 kolom kosong → kedua kolom menampilkan pesan',
         (tester) async {
-      await tester.pumpWidget(const MyApp());
-      await tester.enterText(find.byKey(const Key('email')), 'user@example.com');
-      await tester.enterText(find.byKey(const Key('sandi')), 'short');
+      await tester.pumpWidget(const MyApp(sudahMasuk: false));
       await tester.tap(find.byKey(const Key('masuk')));
       await tester.pump();
-      expect(find.text('Email atau password salah'), findsNWidgets(2));
+      expect(find.text('Email wajib diisi'), findsOneWidget);
+      expect(find.text('Password wajib diisi'), findsOneWidget);
       expect(find.text('Selamat Datang'), findsOneWidget); // masih di Login
     });
 
-    testWidgets('L02 login valid → Beranda → tap Tambah Servis membuka form',
-        (tester) async {
-      await tester.pumpWidget(const MyApp());
-      await tester.enterText(
-          find.byKey(const Key('email')), 'aang@mygarage.id');
-      await tester.enterText(find.byKey(const Key('sandi')), 'rahasia123');
+    testWidgets('L02 email salah format + password pendek', (tester) async {
+      await tester.pumpWidget(const MyApp(sudahMasuk: false));
+      await tester.enterText(find.byKey(const Key('email')), 'aang@');
+      await tester.enterText(find.byKey(const Key('sandi')), '123');
       await tester.tap(find.byKey(const Key('masuk')));
+      await tester.pump();
+      expect(find.text('Format email belum benar'), findsOneWidget);
+      expect(find.text('Password minimal 6 karakter'), findsOneWidget);
+    });
+
+    testWidgets('L03 mode Daftar: ulangi password harus sama', (tester) async {
+      await tester.pumpWidget(const MyApp(sudahMasuk: false));
+      await tester.tap(find.byKey(const Key('ganti-mode')));
+      await tester.pump();
+      expect(find.text('Buat Akun'), findsOneWidget);
+      await tester.enterText(find.byKey(const Key('email')), 'aang@mygarage.id');
+      await tester.enterText(find.byKey(const Key('sandi')), 'rahasia123');
+      await tester.enterText(find.byKey(const Key('ulangi')), 'rahasia999');
+      await tester.tap(find.byKey(const Key('masuk')));
+      await tester.pump();
+      expect(find.text('Password tidak sama'), findsOneWidget);
+    });
+
+    testWidgets('L04 sudah masuk → Beranda, ada tombol Keluar, Tambah Servis '
+        'membuka form', (tester) async {
+      await tester.pumpWidget(const MyApp(sudahMasuk: true));
       await tester.pumpAndSettle();
-      expect(find.text('Tambah Servis'), findsOneWidget);
+      expect(find.byKey(const Key('keluar')), findsOneWidget);
       await tester.tap(find.byKey(const Key('tambah')));
       await tester.pumpAndSettle();
-      // Form harus terbuka (label kolom pertama terlihat)
       expect(find.text('Nama Perbaikan'), findsOneWidget);
     });
   });
@@ -242,8 +283,8 @@ void main() {
       await tester.pumpAndSettle();
       // Data lama terisi di form
       expect(find.text('Ubah Catatan Servis'), findsOneWidget);
-      final jenisField = tester.widget<TextField>(find.byKey(const Key('jenis')));
-      final biayaField = tester.widget<TextField>(find.byKey(const Key('biaya')));
+      final jenisField = tester.widget<TextFormField>(find.byKey(const Key('jenis')));
+      final biayaField = tester.widget<TextFormField>(find.byKey(const Key('biaya')));
       expect(jenisField.controller!.text, 'Ganti Oli Mesin');
       expect(biayaField.controller!.text, '250000');
       // Ubah biaya lalu simpan
