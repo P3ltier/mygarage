@@ -3,6 +3,10 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import 'firebase_options.dart';
+import 'models.dart';
+
+// Model ikut diekspor agar test lama (`package:mygarage/main.dart`) tetap jalan.
+export 'models.dart';
 
 // ============================================================
 // Style guide — dari Figma "2201650002 - MyGarage - Wireframe"
@@ -24,22 +28,8 @@ const double kJarakM = 16;
 const double kJarakL = 24;
 
 // ============================================================
-// Model & format
+// Format (model 3 collection ada di lib/models.dart)
 // ============================================================
-class CatatanServis {
-  CatatanServis({
-    required this.jenis,
-    required this.tanggal,
-    this.kilometer,
-    required this.biaya,
-    int? id,
-  }) : id = id ?? DateTime.now().microsecondsSinceEpoch;
-  final int id;
-  final String jenis;
-  final DateTime tanggal;
-  final int? kilometer;
-  final int biaya;
-}
 
 const List<String> _bulan = [
   'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
