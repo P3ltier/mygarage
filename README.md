@@ -113,10 +113,10 @@ Untuk melihat tampilan mobile di browser: Chrome → F12 → Toggle device toolb
 
 ```bash
 flutter analyze   # No issues found
-flutter test      # 40 kasus, semua lulus
+flutter test      # 42 kasus, semua lulus
 ```
 
-Rincian: 5 unit `periksaCatatan` · 3 unit validasi login + pesan galat · 5 widget login L01–L05 · 3 unit `statusPengingat` · 12 widget form K01–K12 · 10 test Firestore F01–F10 · 1 golden screenshot (4 layar 412×917).
+Rincian: 5 unit `periksaCatatan` · 3 unit validasi login + pesan galat · 5 widget login L01–L05 · 3 unit `statusPengingat` · 12 widget form K01–K12 · 12 test Firestore F01–F12 · 1 golden screenshot (4 layar 412×917).
 
 ### Tabel uji Cloud Firestore
 
