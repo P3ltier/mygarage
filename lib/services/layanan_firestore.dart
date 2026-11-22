@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models.dart';
@@ -11,9 +13,22 @@ abstract class LayananData {
     String? namaLengkap,
   });
 
+  /// Dokumen users/{uid}; null bila belum ada (akun dibuat sebelum Firestore).
+  Stream<Pengguna?> streamPengguna({required String uid});
+
   Future<void> isiKendaraanAwalJikaKosong();
 
   Stream<List<Kendaraan>> streamKendaraan();
+}
+
+/// Profil baru; nama kosong diganti awalan email agar sapaan tetap terisi.
+Pengguna _profilBaru(String uid, String email, String? namaLengkap) {
+  final nama = (namaLengkap ?? '').trim();
+  return Pengguna(
+    idPengguna: uid,
+    namaLengkap: nama.isNotEmpty ? nama : email.split('@').first,
+    email: email,
+  );
 }
 
 class LayananFirestore implements LayananData {
@@ -30,16 +45,18 @@ class LayananFirestore implements LayananData {
   }) async {
     final ref = _db.collection('users').doc(uid);
     if ((await ref.get()).exists) return;
-    final nama = (namaLengkap ?? '').trim();
     await ref.set({
-      ...Pengguna(
-        idPengguna: uid,
-        namaLengkap: nama.isNotEmpty ? nama : email.split('@').first,
-        email: email,
-      ).toMap(),
+      ..._profilBaru(uid, email, namaLengkap).toMap(),
       'dibuat_pada': FieldValue.serverTimestamp(),
     });
   }
+
+  @override
+  Stream<Pengguna?> streamPengguna({required String uid}) => _db
+      .collection('users')
+      .doc(uid)
+      .snapshots()
+      .map((d) => d.exists ? Pengguna.fromMap(d.data()!) : null);
 
   @override
   Future<void> isiKendaraanAwalJikaKosong() async {
@@ -65,19 +82,35 @@ class LayananMemori implements LayananData {
       : _kendaraan = List.of(kendaraan ?? daftarKendaraanAwal);
 
   final List<Kendaraan> _kendaraan;
+  final _pengguna = <String, Pengguna>{};
+  final _berubah = StreamController<void>.broadcast();
+
+  // Seperti snapshots(): tiap listener baru (StreamBuilder dibangun ulang)
+  // langsung menerima data terkini, lalu setiap perubahan.
+  Stream<T> _pantau<T>(T Function() ambil) => Stream.multi((s) {
+        s.add(ambil());
+        final sub = _berubah.stream.listen((_) => s.add(ambil()));
+        s.onCancel = sub.cancel;
+      });
 
   @override
   Future<void> simpanPenggunaSaatLogin({
     required String uid,
     required String email,
     String? namaLengkap,
-  }) async {}
+  }) async {
+    _pengguna.putIfAbsent(uid, () => _profilBaru(uid, email, namaLengkap));
+    _berubah.add(null);
+  }
+
+  @override
+  Stream<Pengguna?> streamPengguna({required String uid}) =>
+      _pantau(() => _pengguna[uid]);
 
   @override
   Future<void> isiKendaraanAwalJikaKosong() async {}
 
   @override
-  Stream<List<Kendaraan>> streamKendaraan() async* {
-    yield List.of(_kendaraan);
-  }
+  Stream<List<Kendaraan>> streamKendaraan() =>
+      _pantau(() => List.of(_kendaraan));
 }

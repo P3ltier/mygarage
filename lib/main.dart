@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'firebase_options.dart';
 import 'models.dart';
+import 'services/layanan_firestore.dart';
 
 // Model ikut diekspor agar test lama (`package:mygarage/main.dart`) tetap jalan.
 export 'models.dart';
@@ -423,11 +424,16 @@ final List<CatatanServis> seedDefault = [
 // ============================================================
 // MyApp — pemuatan state paling luar (login → shell 2 tab)
 // ============================================================
+/// uid pengganti di jalur test (sudahMasuk diisi), karena FirebaseAuth dilewati.
+const String uidUji = 'pengguna-uji';
+
 class MyApp extends StatefulWidget {
-  const MyApp({super.key, this.seed, this.sudahMasuk});
+  const MyApp({super.key, this.seed, this.sudahMasuk, this.layanan});
   final List<CatatanServis>? seed;
   /// Hanya untuk test: lewati Firebase (true = Beranda, false = Login).
   final bool? sudahMasuk;
+  /// null = LayananMemori di jalur test, Firestore saat aplikasi jalan.
+  final LayananData? layanan;
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -441,6 +447,20 @@ class _MyAppState extends State<MyApp> {
   late final List<CatatanServis> catatan =
       List.of(widget.seed ?? seedDefault);
   int _tab = 0;
+  late final LayananData _layanan = widget.layanan ??
+      (widget.sudahMasuk != null ? LayananMemori() : LayananFirestore());
+  String? _uid;
+  late Stream<Pengguna?> _streamPengguna;
+  late Stream<List<Kendaraan>> _streamKendaraan;
+
+  // build() terpanggil berulang (ganti tab, ubah ukuran jendela): cukup sekali per uid.
+  void _siapkan(String uid) {
+    if (uid == _uid) return;
+    _uid = uid;
+    _streamPengguna = _layanan.streamPengguna(uid: uid);
+    _streamKendaraan = _layanan.streamKendaraan();
+    _layanan.isiKendaraanAwalJikaKosong();
+  }
 
   void _keluar() {
     _tab = 0;
@@ -490,8 +510,8 @@ class _MyAppState extends State<MyApp> {
         useMaterial3: true,
       ),
       home: switch (widget.sudahMasuk) {
-        true => _buildShell(),
-        false => const HalamanLogin(),
+        true => _buildShell(uidUji, null),
+        false => HalamanLogin(layanan: _layanan),
         null => _cekStatusLogin(),
       },
     );
@@ -506,14 +526,25 @@ class _MyAppState extends State<MyApp> {
           return const Scaffold(
               body: Center(child: CircularProgressIndicator()));
         }
-        return snapshot.hasData ? _buildShell() : const HalamanLogin();
+        final user = snapshot.data;
+        return user != null
+            ? _buildShell(user.uid, user.email)
+            : HalamanLogin(layanan: _layanan);
       },
     );
   }
 
-  Widget _buildShell() {
+  Widget _buildShell(String uid, String? email) {
+    _siapkan(uid);
     final konten = _tab == 0
-        ? KontenBeranda(catatan: catatan, onTambah: () => _bukaForm())
+        ? KontenBeranda(
+            catatan: catatan,
+            onTambah: () => _bukaForm(),
+            sapaan: SapaanBeranda(
+                pengguna: _streamPengguna,
+                kendaraan: _streamKendaraan,
+                email: email),
+          )
         : KontenRiwayat(
             catatan: catatan,
             onTambah: () => _bukaForm(),
@@ -627,7 +658,8 @@ class _MyAppState extends State<MyApp> {
 // H1 — LOGIN
 // ============================================================
 class HalamanLogin extends StatefulWidget {
-  const HalamanLogin({super.key});
+  const HalamanLogin({super.key, required this.layanan});
+  final LayananData layanan;
 
   @override
   State<HalamanLogin> createState() => _HalamanLoginState();
@@ -637,6 +669,7 @@ class HalamanLogin extends StatefulWidget {
 /// Navigator: StreamBuilder di MyApp yang mengganti halaman.
 class _HalamanLoginState extends State<HalamanLogin> {
   final _formKey = GlobalKey<FormState>();
+  final _nama = TextEditingController();
   final _email = TextEditingController();
   final _sandi = TextEditingController();
   final _ulangi = TextEditingController();
@@ -645,6 +678,7 @@ class _HalamanLoginState extends State<HalamanLogin> {
 
   @override
   void dispose() {
+    _nama.dispose();
     _email.dispose();
     _sandi.dispose();
     _ulangi.dispose();
@@ -658,13 +692,18 @@ class _HalamanLoginState extends State<HalamanLogin> {
     setState(() => _sedangProses = true);
     final email = _email.text.trim();
     final password = _sandi.text;
+    final nama = _modeDaftar ? _nama.text : null;
     try {
-      if (_modeDaftar) {
-        await FirebaseAuth.instance.createUserWithEmailAndPassword(
-            email: email, password: password);
-      } else {
-        await FirebaseAuth.instance.signInWithEmailAndPassword(
-            email: email, password: password);
+      final kredensial = _modeDaftar
+          ? await FirebaseAuth.instance.createUserWithEmailAndPassword(
+              email: email, password: password)
+          : await FirebaseAuth.instance.signInWithEmailAndPassword(
+              email: email, password: password);
+      try {
+        await widget.layanan.simpanPenggunaSaatLogin(
+            uid: kredensial.user!.uid, email: email, namaLengkap: nama);
+      } catch (_) {
+        // Login tetap jalan bila profil gagal tersimpan; sapaan pakai awalan email.
       }
     } on FirebaseAuthException catch (e) {
       pesan.showSnackBar(SnackBar(
@@ -729,6 +768,15 @@ class _HalamanLoginState extends State<HalamanLogin> {
                     : 'Masuk untuk mengelola catatan servis mobil Anda.',
                 style: const TextStyle(fontSize: 14, color: kTeksSekunder)),
             const SizedBox(height: kJarakL),
+            if (_modeDaftar) ...[
+              InputField(
+                fieldKey: const Key('nama'),
+                controller: _nama,
+                label: 'Nama Lengkap',
+                hint: 'Boleh dikosongkan',
+              ),
+              const SizedBox(height: kJarakM),
+            ],
             InputField(
               fieldKey: const Key('email'),
               controller: _email,
@@ -818,16 +866,19 @@ class _HalamanLoginState extends State<HalamanLogin> {
         // Web: tanpa sidebar (pre-auth), kartu 480 px di tengah
         return Scaffold(
           backgroundColor: kCardBg,
+          // Bisa digulir: mode Daftar (4 kolom) lebih tinggi dari layar laptop pendek.
           body: Center(
-            child: Card(
-              elevation: 0,
-              color: kLatar,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(kRadius),
-                  side: const BorderSide(color: kGaris)),
-              child: Padding(
-                padding: const EdgeInsets.all(kJarakL),
-                child: _isi(400),
+            child: SingleChildScrollView(
+              child: Card(
+                elevation: 0,
+                color: kLatar,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(kRadius),
+                    side: const BorderSide(color: kGaris)),
+                child: Padding(
+                  padding: const EdgeInsets.all(kJarakL),
+                  child: _isi(400),
+                ),
               ),
             ),
           ),
@@ -852,9 +903,10 @@ class _HalamanLoginState extends State<HalamanLogin> {
 // ============================================================
 class KontenBeranda extends StatelessWidget {
   const KontenBeranda(
-      {super.key, required this.catatan, required this.onTambah});
+      {super.key, required this.catatan, required this.onTambah, this.sapaan});
   final List<CatatanServis> catatan;
   final VoidCallback onTambah;
+  final Widget? sapaan;
 
   @override
   Widget build(BuildContext context) {
@@ -906,6 +958,7 @@ class KontenBeranda extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    ?sapaan,
                     kartuStatus,
                     const SizedBox(height: kJarakM),
                     TombolUtama(
@@ -970,6 +1023,7 @@ class KontenBeranda extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            ?sapaan,
             kartuStatus,
             const SizedBox(height: kJarakM),
             TombolUtama(
@@ -977,6 +1031,52 @@ class KontenBeranda extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Sapaan Beranda: nama dari users/{uid} (cadangan: awalan email) dan
+/// kendaraan dari collection kendaraan.
+class SapaanBeranda extends StatelessWidget {
+  const SapaanBeranda(
+      {super.key, required this.pengguna, required this.kendaraan, this.email});
+  final Stream<Pengguna?> pengguna;
+  final Stream<List<Kendaraan>> kendaraan;
+  final String? email;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<Pengguna?>(
+      stream: pengguna,
+      builder: (context, snap) {
+        final namaDoc = snap.data?.namaLengkap ?? '';
+        final nama = namaDoc.isNotEmpty ? namaDoc : email?.split('@').first;
+        // Jalur test tanpa akun: tidak ada nama, tata letak Beranda tetap.
+        if (nama == null) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(bottom: kJarakM),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Halo, $nama',
+                  style: const TextStyle(
+                      fontFamily: 'Roboto',
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: kTeksUtama)),
+              StreamBuilder<List<Kendaraan>>(
+                stream: kendaraan,
+                builder: (context, k) => Text(
+                    [
+                      for (final x in k.data ?? const <Kendaraan>[])
+                        '${x.namaKendaraan} · ${x.merek} ${x.tahun} · ${x.platNomor}',
+                    ].join('\n'),
+                    style: const TextStyle(fontSize: 12, color: kTeksSekunder)),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
