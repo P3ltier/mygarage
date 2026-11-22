@@ -177,6 +177,23 @@ void main() {
       expect(find.text('Belum ada catatan servis'), findsOneWidget);
     });
   });
+
+  group('Regresi dari uji Chrome', () {
+    test('F11 seedDefault punya id unik (dulu 3 catatan menulis ke dokumen yang sama)', () {
+      expect(seedDefault.map((c) => c.id).toSet(), hasLength(seedDefault.length));
+      expect(seedDefault, hasLength(3));
+    });
+
+    testWidgets('F12 Beranda tetap menampilkan kendaraan walau stream hanya boleh satu listener', (tester) async {
+      // .snapshots() Firestore single-subscription; dulu stream yang sama
+      // didengarkan dua kali sehingga baris kendaraan hilang.
+      await tester.pumpWidget(MyApp(
+          sudahMasuk: true, layanan: _LayananSatuListener(daftarKendaraanAwal)));
+      await tester.pumpAndSettle();
+      expect(find.text('Mobil Harian · Toyota 2019 · B 1234 XYZ'),
+          findsOneWidget);
+    });
+  });
 }
 
 /// LayananData palsu untuk menguji keadaan loading/galat/kosong.
@@ -211,4 +228,42 @@ class _LayananUji implements LayananData {
   @override
   Stream<List<CatatanServis>> streamCatatanSaya({required String uid}) =>
       _stream;
+}
+
+/// Meniru .snapshots() Firestore: satu stream hanya boleh satu listener.
+class _LayananSatuListener implements LayananData {
+  _LayananSatuListener(this._kendaraan);
+  final List<Kendaraan> _kendaraan;
+
+  @override
+  Future<void> simpanPenggunaSaatLogin(
+      {required String uid,
+      required String email,
+      String? namaLengkap}) async {}
+
+  @override
+  Stream<Pengguna?> streamPengguna({required String uid}) =>
+      Stream.value(Pengguna(idPengguna: uid, namaLengkap: 'Test', email: 'a@b.c'));
+
+  @override
+  Future<void> isiKendaraanAwalJikaKosong() async {}
+
+  @override
+  Stream<List<Kendaraan>> streamKendaraan() {
+    // single-subscription: listen kedua akan melempar StateError bila stream sama
+    final c = StreamController<List<Kendaraan>>();
+    c.add(_kendaraan);
+    return c.stream;
+  }
+
+  @override
+  Future<void> isiCatatanAwalJikaKosong(
+      {required String uid, required List<CatatanServis> awal}) async {}
+
+  @override
+  Future<void> simpanCatatan(CatatanServis c, {required String uid}) async {}
+
+  @override
+  Stream<List<CatatanServis>> streamCatatanSaya({required String uid}) =>
+      Stream.value(const <CatatanServis>[]);
 }

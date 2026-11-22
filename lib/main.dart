@@ -410,17 +410,25 @@ class KartuRiwayat extends StatelessWidget {
 // ============================================================
 // Demo indikator MERAH: SEMUA tanggal harus >= 3 bulan dari hari ini,
 // karena indikator membaca tanggal servis yang PALING BARU.
+// id eksplisit: CatatanServis() tanpa id memakai microsecondsSinceEpoch, dan
+// tiga objek yang dibuat berurutan bisa jatuh di mikrodetik yang sama sehingga
+// menulis ke dokumen Firestore yang sama.
 final List<CatatanServis> seedDefault = [
   CatatanServis(
+      id: 20260712,
       jenis: 'Ganti Oli Mesin',
       tanggal: DateTime(2026, 7, 12), // paling baru: sudah 3 bulan
       biaya: 250000),
   CatatanServis(
+      id: 20260620,
       jenis: 'Balancing Ban',
       tanggal: DateTime(2026, 6, 20),
       biaya: 100000),
   CatatanServis(
-      jenis: 'Ganti Aki', tanggal: DateTime(2026, 5, 5), biaya: 900000),
+      id: 20260505,
+      jenis: 'Ganti Aki',
+      tanggal: DateTime(2026, 5, 5),
+      biaya: 900000),
 ];
 
 // ============================================================
@@ -465,7 +473,10 @@ class _MyAppState extends State<MyApp> {
     _streamKendaraan = _layanan.streamKendaraan();
     _streamCatatan = _layanan.streamCatatanSaya(uid: uid);
     _subKendaraan?.cancel();
-    _subKendaraan = _streamKendaraan.listen((k) => _kendaraanTerkini = k);
+    // Panggilan terpisah: .snapshots() Firestore hanya boleh satu listener,
+    // sedangkan SapaanBeranda juga mendengarkan stream kendaraan.
+    _subKendaraan =
+        _layanan.streamKendaraan().listen((k) => _kendaraanTerkini = k);
     _layanan.isiKendaraanAwalJikaKosong();
     _layanan.isiCatatanAwalJikaKosong(
         uid: uid, awal: widget.seed ?? seedDefault);
