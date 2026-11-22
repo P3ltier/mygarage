@@ -74,6 +74,9 @@ class CatatanServis {
     this.kilometer,
     required this.biaya,
     int? id,
+    this.idPengguna,
+    this.idKendaraan,
+    this.namaKendaraan,
   }) : id = id ?? DateTime.now().microsecondsSinceEpoch;
 
   final int id;
@@ -82,10 +85,21 @@ class CatatanServis {
   final int? kilometer;
   final int biaya;
 
+  /// Pemilik catatan (uid Auth); null untuk data seed/demo di memori.
+  final String? idPengguna;
+
+  /// Kendaraan = referensi collection `kendaraan`; `namaKendaraan` sengaja
+  /// disalin (denormalisasi) karena Firestore tidak punya JOIN.
+  final String? idKendaraan;
+  final String? namaKendaraan;
+
   /// Doc ID di Firestore = id.toString() (id int dipertahankan agar mode Ubah
   /// dan test lama tidak berubah).
   Map<String, dynamic> toMap() => {
         'id_catatan': id,
+        if (idPengguna != null) 'id_pengguna': idPengguna,
+        if (idKendaraan != null) 'id_kendaraan': idKendaraan,
+        if (namaKendaraan != null) 'nama_kendaraan': namaKendaraan,
         'jenis': jenis,
         'tanggal': Timestamp.fromDate(tanggal),
         'kilometer': kilometer,
@@ -94,10 +108,24 @@ class CatatanServis {
 
   factory CatatanServis.fromMap(Map<String, dynamic> m) => CatatanServis(
         id: (m['id_catatan'] as num?)?.toInt(),
+        idPengguna: m['id_pengguna'] as String?,
+        idKendaraan: m['id_kendaraan'] as String?,
+        namaKendaraan: m['nama_kendaraan'] as String?,
         jenis: m['jenis'] as String? ?? '',
         tanggal: (m['tanggal'] as Timestamp?)?.toDate() ?? DateTime(2000),
         kilometer: (m['kilometer'] as num?)?.toInt(),
         biaya: (m['biaya'] as num?)?.toInt() ?? 0,
+      );
+
+  CatatanServis denganPemilik(String uid) => CatatanServis(
+        id: id,
+        idPengguna: uid,
+        idKendaraan: idKendaraan,
+        namaKendaraan: namaKendaraan,
+        jenis: jenis,
+        tanggal: tanggal,
+        kilometer: kilometer,
+        biaya: biaya,
       );
 }
 

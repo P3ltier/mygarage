@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mygarage/main.dart';
+import 'package:mygarage/services/layanan_firestore.dart';
 
 /// Golden screenshot untuk README.
 /// Jalan manual:  GOLDENS=1 flutter test --update-goldens test/screenshot_golden_test.dart
@@ -47,8 +48,12 @@ void main() {
     await expectLater(
         find.byType(MaterialApp), matchesGoldenFile('goldens/login.png'));
 
-    // Beranda (merah: seed 12 Jul 2026) — login asli butuh Firebase, dilewati
-    await tester.pumpWidget(const MyApp(sudahMasuk: true));
+    // Beranda (merah: seed 12 Jul 2026) — login asli butuh Firebase, dilewati.
+    // Profil diisi lewat LayananMemori supaya sapaan nama ikut terlihat.
+    final layanan = LayananMemori();
+    await layanan.simpanPenggunaSaatLogin(
+        uid: uidUji, email: 'aang@mygarage.id', namaLengkap: 'Anggaradyan');
+    await tester.pumpWidget(MyApp(sudahMasuk: true, layanan: layanan));
     await tester.pumpAndSettle();
     await expectLater(
         find.byType(MaterialApp), matchesGoldenFile('goldens/beranda.png'));

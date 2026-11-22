@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -444,14 +446,16 @@ class _MyAppState extends State<MyApp> {
   // dan ScaffoldMessenger harus diakses lewat key, bukan context.
   final _navigatorKey = GlobalKey<NavigatorState>();
   final _scaffoldKey = GlobalKey<ScaffoldMessengerState>();
-  late final List<CatatanServis> catatan =
-      List.of(widget.seed ?? seedDefault);
   int _tab = 0;
   late final LayananData _layanan = widget.layanan ??
       (widget.sudahMasuk != null ? LayananMemori() : LayananFirestore());
   String? _uid;
   late Stream<Pengguna?> _streamPengguna;
   late Stream<List<Kendaraan>> _streamKendaraan;
+  late Stream<List<CatatanServis>> _streamCatatan;
+  StreamSubscription<List<Kendaraan>>? _subKendaraan;
+  /// Salinan terakhir daftar kendaraan: form dibuka tanpa await (tanpa jeda).
+  List<Kendaraan> _kendaraanTerkini = const [];
 
   // build() terpanggil berulang (ganti tab, ubah ukuran jendela): cukup sekali per uid.
   void _siapkan(String uid) {
@@ -459,10 +463,22 @@ class _MyAppState extends State<MyApp> {
     _uid = uid;
     _streamPengguna = _layanan.streamPengguna(uid: uid);
     _streamKendaraan = _layanan.streamKendaraan();
+    _streamCatatan = _layanan.streamCatatanSaya(uid: uid);
+    _subKendaraan?.cancel();
+    _subKendaraan = _streamKendaraan.listen((k) => _kendaraanTerkini = k);
     _layanan.isiKendaraanAwalJikaKosong();
+    _layanan.isiCatatanAwalJikaKosong(
+        uid: uid, awal: widget.seed ?? seedDefault);
+  }
+
+  @override
+  void dispose() {
+    _subKendaraan?.cancel();
+    super.dispose();
   }
 
   void _keluar() {
+    _uid = null; // tab & stream diatur ulang oleh _siapkan saat login berikutnya
     _tab = 0;
     FirebaseAuth.instance.signOut();
   }
@@ -470,31 +486,24 @@ class _MyAppState extends State<MyApp> {
   void _bukaForm({CatatanServis? edit}) async {
     final hasil = await _navigatorKey.currentState!.push(
       MaterialPageRoute(
-          builder: (_) => HalamanTambahCatatan(edit: edit)),
-    );
-    if (!mounted) return; // widget bisa sudah tidak ada setelah await
-    if (hasil is CatatanServis) {
-      setState(() {
-        if (edit == null) {
-          catatan.add(hasil);
-        } else {
-          // Alur Edit: ganti catatan lama dengan hasil ubahan (posisi tetap).
-          final i = catatan.indexWhere((c) => c.id == hasil.id);
-          if (i >= 0) catatan[i] = hasil;
-        }
-        _tab = 1; // prototipe Figma: Simpan → Riwayat Servis
-      });
-      // Pesan status wajib UTS: SnackBar setelah Simpan
-      if (!mounted) return; // widget bisa sudah tidak ada setelah await
-      _scaffoldKey.currentState!.showSnackBar(
-        SnackBar(
-          content: Text(edit == null
-              ? 'Catatan servis disimpan'
-              : 'Catatan servis diperbarui'),
-          backgroundColor: kHijau,
+        builder: (_) => HalamanTambahCatatan(
+          edit: edit,
+          kendaraan: _kendaraanTerkini,
+          simpan: (c) => _layanan.simpanCatatan(c, uid: _uid!),
         ),
-      );
-    }
+      ),
+    );
+    if (!mounted || hasil is! CatatanServis) return;
+    setState(() => _tab = 1); // prototipe Figma: Simpan → Riwayat Servis
+    // Pesan status wajib UTS: SnackBar setelah Simpan
+    _scaffoldKey.currentState!
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(edit == null
+            ? 'Catatan servis disimpan'
+            : 'Catatan servis diperbarui'),
+        backgroundColor: kHijau,
+      ));
   }
 
   @override
@@ -536,20 +545,35 @@ class _MyAppState extends State<MyApp> {
 
   Widget _buildShell(String uid, String? email) {
     _siapkan(uid);
-    final konten = _tab == 0
-        ? KontenBeranda(
-            catatan: catatan,
-            onTambah: () => _bukaForm(),
-            sapaan: SapaanBeranda(
-                pengguna: _streamPengguna,
-                kendaraan: _streamKendaraan,
-                email: email),
-          )
-        : KontenRiwayat(
-            catatan: catatan,
-            onTambah: () => _bukaForm(),
-            onUbah: (c) => _bukaForm(edit: c),
-          );
+    // Data servis dibaca dari stream (Firestore saat aplikasi jalan), bukan
+    // list di memori — tiga keadaan wajib ditangani: loading, galat, kosong.
+    return StreamBuilder<List<CatatanServis>>(
+      stream: _streamCatatan,
+      builder: (context, snap) {
+        final Widget konten;
+        if (snap.hasError) {
+          konten = const _PesanData(
+              ikon: Icons.cloud_off,
+              teks: 'Riwayat servis gagal dimuat. Periksa koneksi lalu coba lagi.');
+        } else if (snap.connectionState == ConnectionState.waiting) {
+          konten = const Center(child: CircularProgressIndicator());
+        } else {
+          final daftar = snap.data ?? const <CatatanServis>[];
+          konten = _tab == 0
+              ? KontenBeranda(
+                  catatan: daftar,
+                  onTambah: () => _bukaForm(),
+                  sapaan: SapaanBeranda(
+                      pengguna: _streamPengguna,
+                      kendaraan: _streamKendaraan,
+                      email: email),
+                )
+              : KontenRiwayat(
+                  catatan: daftar,
+                  onTambah: () => _bukaForm(),
+                  onUbah: (c) => _bukaForm(edit: c),
+                );
+        }
     return LayoutBuilder(builder: (context, kotak) {
       final bool mobile = kotak.maxWidth < 900;
       if (mobile) {
@@ -621,6 +645,8 @@ class _MyAppState extends State<MyApp> {
         ),
       );
     });
+      },
+    );
   }
 
   Widget _menuWeb(IconData ikon, String label, bool aktif, VoidCallback? onTap) {
@@ -1081,6 +1107,32 @@ class SapaanBeranda extends StatelessWidget {
   }
 }
 
+/// Keadaan loading/galat StreamBuilder untuk area konten.
+class _PesanData extends StatelessWidget {
+  const _PesanData({required this.ikon, required this.teks});
+  final IconData ikon;
+  final String teks;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(kJarakL),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(ikon, size: 48, color: kTeksSekunder),
+            const SizedBox(height: kJarakM),
+            Text(teks,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 14, color: kTeksSekunder)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ============================================================
 // H4 — RIWAYAT SERVIS (+ keadaan kosong)
 // ============================================================
@@ -1223,8 +1275,15 @@ class _SelIsi extends StatelessWidget {
 // H3 — TAMBAH CATATAN SERVIS (frame Figma + varian kesalahan)
 // ============================================================
 class HalamanTambahCatatan extends StatefulWidget {
-  const HalamanTambahCatatan({super.key, this.edit});
+  const HalamanTambahCatatan(
+      {super.key, this.edit, this.kendaraan = const [], this.simpan});
   final CatatanServis? edit;
+
+  /// Pilihan kendaraan dari collection `kendaraan` (bukan isian bebas).
+  final List<Kendaraan> kendaraan;
+
+  /// null = jalur test: form hanya mengembalikan catatan ke pemanggil.
+  final Future<void> Function(CatatanServis)? simpan;
 
   @override
   State<HalamanTambahCatatan> createState() => _HalamanTambahCatatanState();
@@ -1237,6 +1296,8 @@ class _HalamanTambahCatatanState extends State<HalamanTambahCatatan> {
   DateTime? _tanggal;
   String? _galatJenis;
   String? _galatBiaya;
+  String? _idKendaraan;
+  bool _menyimpan = false;
 
   @override
   void initState() {
@@ -1249,6 +1310,8 @@ class _HalamanTambahCatatanState extends State<HalamanTambahCatatan> {
       _biaya.text = e.biaya.toString();
       _tanggal = e.tanggal;
     }
+    _idKendaraan = e?.idKendaraan ??
+        (widget.kendaraan.isEmpty ? null : widget.kendaraan.first.idKendaraan);
   }
 
   @override
@@ -1270,25 +1333,50 @@ class _HalamanTambahCatatanState extends State<HalamanTambahCatatan> {
     if (pilih != null) setState(() => _tanggal = pilih);
   }
 
-  void _simpan() {
+  Future<void> _simpan() async {
+    final error = periksaCatatan(_jenis.text, _biaya.text);
     setState(() {
-      final error = periksaCatatan(_jenis.text, _biaya.text);
       _galatJenis = error == 'Jenis perbaikan wajib diisi' ? error : null;
       _galatBiaya = (error == 'Biaya wajib diisi' ||
               error == 'Biaya harus angka lebih dari 0')
           ? error
           : null;
-      if (error != null) return; // tetap di form, persis frame kesalahan
-      final biaya = int.parse(_biaya.text.trim().replaceAll('.', ''));
-      final catatan = CatatanServis(
-        jenis: _jenis.text.trim(),
-        tanggal: _tanggal ?? DateTime.now(),
-        kilometer: int.tryParse(_kilometer.text.trim().replaceAll('.', '')),
-        biaya: biaya,
-        id: widget.edit?.id, // mode ubah: pertahankan identitas catatan
-      );
-      Navigator.pop(context, catatan);
     });
+    if (error != null) return; // tetap di form, persis frame kesalahan
+    final biaya = int.parse(_biaya.text.trim().replaceAll('.', ''));
+    final kendaraan = widget.kendaraan
+        .where((k) => k.idKendaraan == _idKendaraan)
+        .firstOrNull; // nama disalin (denormalisasi) supaya tanpa JOIN
+    final catatan = CatatanServis(
+      jenis: _jenis.text.trim(),
+      tanggal: _tanggal ?? DateTime.now(),
+      kilometer: int.tryParse(_kilometer.text.trim().replaceAll('.', '')),
+      biaya: biaya,
+      id: widget.edit?.id, // mode ubah: pertahankan identitas catatan
+      idPengguna: widget.edit?.idPengguna,
+      idKendaraan: kendaraan?.idKendaraan,
+      namaKendaraan: kendaraan?.namaKendaraan,
+    );
+    final simpan = widget.simpan;
+    if (simpan != null) {
+      setState(() => _menyimpan = true); // cegah tap ganda selagi menunggu jaringan
+      try {
+        await simpan(catatan);
+      } on Exception catch (e) {
+        if (!mounted) return;
+        setState(() => _menyimpan = false);
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(
+            content: Text(e is CatatanDuplikatException
+                ? 'Catatan servis untuk tanggal ini sudah ada'
+                : 'Catatan servis gagal disimpan. Periksa koneksi lalu coba lagi.'),
+            backgroundColor: kMerah,
+          ));
+        return; // form tetap terbuka, isian tidak hilang
+      }
+    }
+    if (mounted) Navigator.pop(context, catatan);
   }
 
   void _batal() => Navigator.pop(context); // kembali tanpa menyimpan
@@ -1316,6 +1404,31 @@ class _HalamanTambahCatatanState extends State<HalamanTambahCatatan> {
                 pesanGalat: _galatJenis,
               ),
               const SizedBox(height: kJarakM),
+              if (widget.kendaraan.isNotEmpty) ...[
+                DropdownButtonFormField<String>(
+                  key: const Key('kendaraan'),
+                  initialValue: _idKendaraan,
+                  decoration: InputDecoration(
+                    labelText: 'Kendaraan',
+                    filled: true,
+                    fillColor: kLatar,
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(kRadius),
+                        borderSide: const BorderSide(color: kGaris)),
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(kRadius),
+                        borderSide: const BorderSide(color: kGaris)),
+                  ),
+                  items: [
+                    for (final k in widget.kendaraan)
+                      DropdownMenuItem(
+                          value: k.idKendaraan,
+                          child: Text('${k.namaKendaraan} · ${k.platNomor}')),
+                  ],
+                  onChanged: (v) => setState(() => _idKendaraan = v),
+                ),
+                const SizedBox(height: kJarakM),
+              ],
               InputField(
                 fieldKey: const Key('tanggal'),
                 controller: TextEditingController(
@@ -1349,7 +1462,9 @@ class _HalamanTambahCatatanState extends State<HalamanTambahCatatan> {
                 children: [
                   Expanded(
                     child: TombolUtama(
-                        key: const Key('simpan'), label: 'Simpan', onPressed: _simpan),
+                        key: const Key('simpan'),
+                        label: 'Simpan',
+                        onPressed: _menyimpan ? null : _simpan),
                   ),
                   const SizedBox(width: kJarakM),
                   Expanded(

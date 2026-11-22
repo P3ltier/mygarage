@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mygarage/main.dart';
@@ -38,4 +40,175 @@ void main() {
           findsOneWidget);
     });
   });
+
+  group('Latihan 3 — simpan catatan dan tolak duplikat', () {
+    test('F04 jenis sama (beda huruf/spasi) di tanggal sama ditolak; '
+        'tanggal lain dan pengguna lain boleh', () async {
+      final l = LayananMemori();
+      await l.simpanCatatan(
+          CatatanServis(
+              jenis: 'Ganti Oli', tanggal: DateTime(2026, 7, 12), biaya: 1),
+          uid: 'u1');
+      await expectLater(
+          () => l.simpanCatatan(
+              CatatanServis(
+                  jenis: '  ganti OLI ',
+                  tanggal: DateTime(2026, 7, 12),
+                  biaya: 2),
+              uid: 'u1'),
+          throwsA(isA<CatatanDuplikatException>()));
+      await l.simpanCatatan(
+          CatatanServis(
+              jenis: 'Ganti Oli', tanggal: DateTime(2026, 7, 13), biaya: 3),
+          uid: 'u1');
+      await l.simpanCatatan(
+          CatatanServis(
+              jenis: 'Ganti Oli', tanggal: DateTime(2026, 7, 12), biaya: 4),
+          uid: 'u2');
+      expect(await l.streamCatatanSaya(uid: 'u1').first, hasLength(2));
+      expect(await l.streamCatatanSaya(uid: 'u2').first, hasLength(1));
+    });
+
+    test('F05 mode Ubah: id sama menimpa dokumen, bukan duplikat', () async {
+      final l = LayananMemori();
+      await l.simpanCatatan(
+          CatatanServis(
+              id: 7,
+              jenis: 'Ganti Oli',
+              tanggal: DateTime(2026, 7, 12),
+              biaya: 1),
+          uid: 'u1');
+      await l.simpanCatatan(
+          CatatanServis(
+              id: 7,
+              jenis: 'Ganti Oli',
+              tanggal: DateTime(2026, 7, 12),
+              biaya: 2),
+          uid: 'u1');
+      final isi = await l.streamCatatanSaya(uid: 'u1').first;
+      expect(isi, hasLength(1));
+      expect(isi.single.biaya, 2);
+    });
+
+    test('F06 toMap/fromMap membawa pemilik + kendaraan; seed tanpa pemilik '
+        'tidak menulis field itu', () async {
+      final c = CatatanServis(
+          id: 7,
+          idPengguna: 'u1',
+          idKendaraan: 'mobil-utama',
+          namaKendaraan: 'Mobil Harian',
+          jenis: 'Ganti Oli',
+          tanggal: DateTime(2026, 7, 12),
+          biaya: 1);
+      final kembali = CatatanServis.fromMap(c.toMap());
+      expect(kembali.idPengguna, 'u1');
+      expect(kembali.idKendaraan, 'mobil-utama');
+      expect(kembali.namaKendaraan, 'Mobil Harian');
+      expect(kembali.id, 7);
+      final seed = CatatanServis(
+          jenis: 'Ganti Oli', tanggal: DateTime(2026, 7, 12), biaya: 1);
+      expect(seed.toMap().containsKey('id_pengguna'), isFalse);
+    });
+
+    testWidgets('F07 simpan kedua dengan jenis+tanggal sama ditolak, '
+        'form tetap terbuka', (tester) async {
+      final l = LayananMemori();
+      await tester.pumpWidget(MyApp(
+          sudahMasuk: true, layanan: l, seed: const <CatatanServis>[]));
+      await tester.pumpAndSettle(); // frame pertama masih keadaan loading
+
+      Future<void> isiDanSimpan(String jenis) async {
+        await tester.tap(find.byKey(const Key('tambah')));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byKey(const Key('jenis')), jenis);
+        await tester.enterText(find.byKey(const Key('biaya')), '150000');
+        await tester.tap(find.byKey(const Key('simpan')));
+        await tester.pumpAndSettle();
+      }
+
+      await isiDanSimpan('Ganti Oli');
+      expect(find.text('Catatan servis disimpan'), findsOneWidget);
+      // SnackBar hijau menutupi bottom nav: biarkan menutup sendiri dulu.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.home_outlined));
+      await tester.pumpAndSettle();
+      expect(find.text('Tambah Servis'), findsOneWidget);
+      await isiDanSimpan('  ganti oli ');
+      expect(find.text('Catatan servis untuk tanggal ini sudah ada'),
+          findsOneWidget);
+      expect(find.byKey(const Key('simpan')), findsOneWidget); // form terbuka
+      // Bukti UI: form ditutup → Riwayat hanya punya SATU kartu (doc tidak bertambah).
+      await tester.tap(find.byKey(const Key('batal')));
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.receipt_long_outlined));
+      await tester.pumpAndSettle();
+      expect(find.text('Ubah'), findsOneWidget);
+    });
+  });
+
+  group('Latihan 4 — StreamBuilder tiga keadaan', () {
+    testWidgets('F08 loading: indikator muncul selagi stream belum mengirim',
+        (tester) async {
+      final menunggu = StreamController<List<CatatanServis>>();
+      addTearDown(menunggu.close);
+      await tester.pumpWidget(
+          MyApp(sudahMasuk: true, layanan: _LayananUji(menunggu.stream)));
+      await tester.pump(); // satu frame: pumpAndSettle akan menggantung
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    });
+
+    testWidgets('F09 galat: pesan ramah, bukan stack trace', (tester) async {
+      await tester.pumpWidget(MyApp(
+          sudahMasuk: true,
+          layanan: _LayananUji(
+              Stream<List<CatatanServis>>.error(Exception('offline')))));
+      await tester.pumpAndSettle();
+      expect(
+          find.textContaining('Riwayat servis gagal dimuat'), findsOneWidget);
+    });
+
+    testWidgets('F10 daftar kosong: keadaan kosong tampil', (tester) async {
+      await tester.pumpWidget(MyApp(
+          sudahMasuk: true,
+          layanan: _LayananUji(Stream.value(const <CatatanServis>[]))));
+      await tester.pumpAndSettle();
+      expect(find.text('Belum ada catatan servis'), findsOneWidget);
+    });
+  });
+}
+
+/// LayananData palsu untuk menguji keadaan loading/galat/kosong.
+class _LayananUji implements LayananData {
+  _LayananUji(this._stream);
+  final Stream<List<CatatanServis>> _stream;
+
+  @override
+  Future<void> simpanPenggunaSaatLogin(
+      {required String uid,
+      required String email,
+      String? namaLengkap}) async {}
+
+  @override
+  Stream<Pengguna?> streamPengguna({required String uid}) =>
+      Stream.value(null);
+
+  @override
+  Future<void> isiKendaraanAwalJikaKosong() async {}
+
+  @override
+  Stream<List<Kendaraan>> streamKendaraan() =>
+      Stream.value(daftarKendaraanAwal);
+
+  @override
+  Future<void> isiCatatanAwalJikaKosong(
+      {required String uid, required List<CatatanServis> awal}) async {}
+
+  @override
+  Future<void> simpanCatatan(CatatanServis c, {required String uid}) async {}
+
+  @override
+  Stream<List<CatatanServis>> streamCatatanSaya({required String uid}) =>
+      _stream;
 }
