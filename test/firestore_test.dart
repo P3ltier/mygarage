@@ -226,6 +226,12 @@ class _LayananUji implements LayananData {
   Future<void> simpanCatatan(CatatanServis c, {required String uid}) async {}
 
   @override
+  Future<void> ubahCatatan(CatatanServis c, {required String uid}) async {}
+
+  @override
+  Future<void> hapusCatatan(CatatanServis c, {required String uid}) async {}
+
+  @override
   Stream<List<CatatanServis>> streamCatatanSaya({required String uid}) =>
       _stream;
 }
@@ -262,6 +268,12 @@ class _LayananSatuListener implements LayananData {
 
   @override
   Future<void> simpanCatatan(CatatanServis c, {required String uid}) async {}
+
+  @override
+  Future<void> ubahCatatan(CatatanServis c, {required String uid}) async {}
+
+  @override
+  Future<void> hapusCatatan(CatatanServis c, {required String uid}) async {}
 
   @override
   Stream<List<CatatanServis>> streamCatatanSaya({required String uid}) =>

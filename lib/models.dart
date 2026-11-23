@@ -74,12 +74,18 @@ class CatatanServis {
     this.kilometer,
     required this.biaya,
     int? id,
+    this.idDokumen,
     this.idPengguna,
     this.idKendaraan,
     this.namaKendaraan,
   }) : id = id ?? DateTime.now().microsecondsSinceEpoch;
 
   final int id;
+
+  /// Doc ID Firestore. Null untuk catatan baru (dipakai `id`), diisi dari
+  /// snapshot agar seed ber-ID per pengguna tetap bisa diubah/dihapus.
+  final String? idDokumen;
+  String get refId => idDokumen ?? '$id';
   final String jenis;
   final DateTime tanggal;
   final int? kilometer;
@@ -106,8 +112,10 @@ class CatatanServis {
         'biaya': biaya,
       };
 
-  factory CatatanServis.fromMap(Map<String, dynamic> m) => CatatanServis(
+  factory CatatanServis.fromMap(Map<String, dynamic> m, {String? idDokumen}) =>
+      CatatanServis(
         id: (m['id_catatan'] as num?)?.toInt(),
+        idDokumen: idDokumen,
         idPengguna: m['id_pengguna'] as String?,
         idKendaraan: m['id_kendaraan'] as String?,
         namaKendaraan: m['nama_kendaraan'] as String?,
@@ -117,8 +125,13 @@ class CatatanServis {
         biaya: (m['biaya'] as num?)?.toInt() ?? 0,
       );
 
+  /// Padanan `bisaDiubah` modul: MyGarage tidak punya status persetujuan,
+  /// jadi yang menentukan catatan boleh diubah/dihapus adalah kepemilikannya.
+  bool bisaDiubahOleh(String uidAktif) => idPengguna == uidAktif;
+
   CatatanServis denganPemilik(String uid) => CatatanServis(
         id: id,
+        idDokumen: idDokumen,
         idPengguna: uid,
         idKendaraan: idKendaraan,
         namaKendaraan: namaKendaraan,

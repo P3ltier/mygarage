@@ -28,14 +28,40 @@ abstract class LayananData {
   });
 
   /// Melempar [CatatanDuplikatException] tanpa menulis apa pun bila duplikat.
-  /// Catatan dengan id yang sudah ada (mode Ubah) menimpa dokumennya.
+  /// Khusus Create; mode Ubah memakai [ubahCatatan].
   Future<void> simpanCatatan(CatatanServis c, {required String uid});
+
+  /// `update()` hanya field yang berubah: `dibuat_pada` dan `id_pengguna`
+  /// tetap, `diubah_pada` diisi server.
+  Future<void> ubahCatatan(CatatanServis c, {required String uid});
+
+  Future<void> hapusCatatan(CatatanServis c, {required String uid});
 
   Stream<List<CatatanServis>> streamCatatanSaya({required String uid});
 }
 
 class CatatanDuplikatException implements Exception {
   const CatatanDuplikatException();
+}
+
+/// Operasi ubah/hapus ditolak aturan bisnis (bukan pemilik / data hilang).
+class OperasiDitolakException implements Exception {
+  const OperasiDitolakException(this.pesan);
+  final String pesan;
+  @override
+  String toString() => pesan;
+}
+
+/// Lapis kedua modul: aturan bisnis di kode, cermin Security Rules kepemilikan.
+void pastikanBolehDiubah({
+  required CatatanServis catatan,
+  required String uidAktif,
+  required String aksi,
+}) {
+  if (!catatan.bisaDiubahOleh(uidAktif)) {
+    throw OperasiDitolakException(
+        'Catatan servis ini bukan milikmu, tidak bisa $aksi.');
+  }
 }
 
 bool _hariSama(DateTime a, DateTime b) =>
@@ -114,17 +140,25 @@ class LayananFirestore implements LayananData {
     required String uid,
     required List<CatatanServis> awal,
   }) async {
+    // Penanda sekali-per-akun: tanpa ini, menghapus semua catatan lalu
+    // refresh akan memunculkan lagi 3 catatan contoh (fitur Hapus tampak rusak).
+    final userRef = _db.collection('users').doc(uid);
+    if ((await userRef.get()).data()?['sudah_ditanam'] == true) return;
     final cek =
         await _servis.where('id_pengguna', isEqualTo: uid).limit(1).get();
-    if (cek.docs.isNotEmpty) return;
-    final batch = _db.batch();
-    for (final c in awal) {
-      batch.set(_servis.doc('${c.id}'), {
-        ...c.denganPemilik(uid).toMap(),
-        'dibuat_pada': FieldValue.serverTimestamp(),
-      });
+    if (cek.docs.isEmpty) {
+      final batch = _db.batch();
+      for (final c in awal) {
+        // Doc ID memuat uid: id seed sama untuk semua akun, jadi tanpa uid
+        // akun kedua menimpa seed akun pertama (doc ID Firestore global).
+        batch.set(_servis.doc('${uid}_${c.id}'), {
+          ...c.denganPemilik(uid).toMap(),
+          'dibuat_pada': FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
     }
-    await batch.commit();
+    await userRef.set({'sudah_ditanam': true}, SetOptions(merge: true));
   }
 
   @override
@@ -136,7 +170,7 @@ class LayananFirestore implements LayananData {
         .toList();
     if (adaDuplikat(milik, c)) throw const CatatanDuplikatException();
     final sudahAda = milik.any((x) => x.id == c.id);
-    await _servis.doc('${c.id}').set({
+    await _servis.doc(c.refId).set({
       ...c.denganPemilik(uid).toMap(),
       // Mode Ubah: jangan timpa waktu dibuat yang lama.
       if (!sudahAda) 'dibuat_pada': FieldValue.serverTimestamp(),
@@ -144,12 +178,57 @@ class LayananFirestore implements LayananData {
   }
 
   @override
+  Future<void> ubahCatatan(CatatanServis c, {required String uid}) async {
+    final docRef = _servis.doc(c.refId);
+    final snap = await docRef.get();
+    if (!snap.exists) {
+      throw const OperasiDitolakException('Catatan servis tidak ditemukan.');
+    }
+    pastikanBolehDiubah(
+      catatan: CatatanServis.fromMap(snap.data()!, idDokumen: snap.id),
+      uidAktif: uid,
+      aksi: 'diubah',
+    );
+    final milik = (await _servis.where('id_pengguna', isEqualTo: uid).get())
+        .docs
+        .map((d) => CatatanServis.fromMap(d.data(), idDokumen: d.id))
+        .toList();
+    // Catatan ini sendiri tidak dihitung bentrok (padanan abaikanIdReservasi).
+    if (adaDuplikat(milik, c)) throw const CatatanDuplikatException();
+    await docRef.update({
+      'jenis': c.jenis,
+      'tanggal': Timestamp.fromDate(c.tanggal),
+      'kilometer': c.kilometer,
+      'biaya': c.biaya,
+      'id_kendaraan': c.idKendaraan,
+      'nama_kendaraan': c.namaKendaraan,
+      'diubah_pada': FieldValue.serverTimestamp(),
+    });
+  }
+
+  @override
+  Future<void> hapusCatatan(CatatanServis c, {required String uid}) async {
+    final docRef = _servis.doc(c.refId);
+    final snap = await docRef.get();
+    if (!snap.exists) {
+      throw const OperasiDitolakException('Catatan servis sudah tidak ada.');
+    }
+    pastikanBolehDiubah(
+      catatan: CatatanServis.fromMap(snap.data()!, idDokumen: snap.id),
+      uidAktif: uid,
+      aksi: 'dihapus',
+    );
+    await docRef.delete();
+  }
+
+  @override
   Stream<List<CatatanServis>> streamCatatanSaya({required String uid}) =>
       _servis
           .where('id_pengguna', isEqualTo: uid)
           .snapshots()
-          .map((s) => _urutkan(
-              s.docs.map((d) => CatatanServis.fromMap(d.data())).toList()));
+          .map((s) => _urutkan(s.docs
+              .map((d) => CatatanServis.fromMap(d.data(), idDokumen: d.id))
+              .toList()));
 }
 
 /// Pengganti Firestore saat widget test: semua data di memori.
@@ -160,6 +239,7 @@ class LayananMemori implements LayananData {
   final List<Kendaraan> _kendaraan;
   final _pengguna = <String, Pengguna>{};
   final _catatan = <String, List<CatatanServis>>{}; // per uid
+  final _sudahDitanam = <String>{};
   final _berubah = StreamController<void>.broadcast();
 
   // Seperti snapshots(): tiap listener baru (StreamBuilder dibangun ulang)
@@ -196,8 +276,44 @@ class LayananMemori implements LayananData {
     required String uid,
     required List<CatatanServis> awal,
   }) async {
+    if (!_sudahDitanam.add(uid)) return; // sekali per akun, termasuk setelah dihapus
     _catatan.putIfAbsent(
         uid, () => awal.map((c) => c.denganPemilik(uid)).toList());
+    _berubah.add(null);
+  }
+
+  /// Cari lintas uid: meniru Firestore, dokumen milik akun lain tetap ketemu
+  /// lalu ditolak [pastikanBolehDiubah].
+  CatatanServis? _cari(int id) {
+    for (final daftar in _catatan.values) {
+      for (final c in daftar) {
+        if (c.id == id) return c;
+      }
+    }
+    return null;
+  }
+
+  @override
+  Future<void> ubahCatatan(CatatanServis c, {required String uid}) async {
+    final lama = _cari(c.id);
+    if (lama == null) {
+      throw const OperasiDitolakException('Catatan servis tidak ditemukan.');
+    }
+    pastikanBolehDiubah(catatan: lama, uidAktif: uid, aksi: 'diubah');
+    final milik = _catatan[uid]!;
+    if (adaDuplikat(milik, c)) throw const CatatanDuplikatException();
+    milik[milik.indexWhere((x) => x.id == c.id)] = c.denganPemilik(uid);
+    _berubah.add(null);
+  }
+
+  @override
+  Future<void> hapusCatatan(CatatanServis c, {required String uid}) async {
+    final lama = _cari(c.id);
+    if (lama == null) {
+      throw const OperasiDitolakException('Catatan servis sudah tidak ada.');
+    }
+    pastikanBolehDiubah(catatan: lama, uidAktif: uid, aksi: 'dihapus');
+    _catatan[uid]!.removeWhere((x) => x.id == c.id);
     _berubah.add(null);
   }
 
