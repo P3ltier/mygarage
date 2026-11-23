@@ -340,11 +340,17 @@ class BottomNavMyGarage extends StatelessWidget {
   }
 }
 
-/// Kartu Riwayat Figma: nama perbaikan + tanggal kiri, biaya kanan, tombol Ubah.
+/// Kartu Riwayat Figma: nama perbaikan + tanggal kiri, biaya kanan, aksi
+/// Ubah/Hapus (dua tombol pada baris yang sama).
 class KartuRiwayat extends StatelessWidget {
-  const KartuRiwayat({super.key, required this.catatan, required this.onUbah});
+  const KartuRiwayat(
+      {super.key,
+      required this.catatan,
+      required this.onUbah,
+      required this.onHapus});
   final CatatanServis catatan;
   final VoidCallback onUbah;
+  final VoidCallback onHapus;
 
   @override
   Widget build(BuildContext context) {
@@ -384,20 +390,46 @@ class KartuRiwayat extends StatelessWidget {
             ],
           ),
           const SizedBox(height: kJarakS),
-          SizedBox(
-            height: 40,
-            child: OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: kPrimer,
-                side: const BorderSide(color: kPrimer, width: 2),
-                textStyle: const TextStyle(fontFamily: 'Roboto', 
-                    fontSize: 14, fontWeight: FontWeight.w600),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(kRadius)),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 40,
+                  child: OutlinedButton(
+                    key: Key('ubah-${catatan.id}'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: kPrimer,
+                      side: const BorderSide(color: kPrimer, width: 2),
+                      textStyle: const TextStyle(fontFamily: 'Roboto', 
+                          fontSize: 14, fontWeight: FontWeight.w600),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(kRadius)),
+                    ),
+                    onPressed: onUbah,
+                    child: const Text('Ubah'),
+                  ),
+                ),
               ),
-              onPressed: onUbah,
-              child: const Text('Ubah'),
-            ),
+              const SizedBox(width: kJarakS),
+              Expanded(
+                child: SizedBox(
+                  height: 40,
+                  child: OutlinedButton(
+                    key: Key('hapus-${catatan.id}'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: kMerah,
+                      side: const BorderSide(color: kMerah, width: 2),
+                      textStyle: const TextStyle(fontFamily: 'Roboto', 
+                          fontSize: 14, fontWeight: FontWeight.w600),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(kRadius)),
+                    ),
+                    onPressed: onHapus,
+                    child: const Text('Hapus'),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -500,7 +532,9 @@ class _MyAppState extends State<MyApp> {
         builder: (_) => HalamanTambahCatatan(
           edit: edit,
           kendaraan: _kendaraanTerkini,
-          simpan: (c) => _layanan.simpanCatatan(c, uid: _uid!),
+          simpan: (c) => edit == null
+              ? _layanan.simpanCatatan(c, uid: _uid!)
+              : _layanan.ubahCatatan(c, uid: _uid!),
         ),
       ),
     );
@@ -515,6 +549,46 @@ class _MyAppState extends State<MyApp> {
             : 'Catatan servis diperbarui'),
         backgroundColor: kHijau,
       ));
+  }
+
+  void _pesan(String teks, Color warna) {
+    _scaffoldKey.currentState!
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(teks), backgroundColor: warna));
+  }
+
+  /// Hapus selalu lewat dialog konfirmasi (modul: tanggung jawab UI).
+  Future<void> _hapus(CatatanServis c) async {
+    final yakin = await showDialog<bool>(
+      context: _navigatorKey.currentContext!,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Hapus catatan servis?'),
+        content: Text('${c.jenis} pada ${formatTanggal(c.tanggal)} '
+            'akan dihapus permanen.'),
+        actions: [
+          TextButton(
+            key: const Key('batal-hapus'),
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            key: const Key('yakin-hapus'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+    if (yakin != true || !mounted) return;
+    try {
+      await _layanan.hapusCatatan(c, uid: _uid!);
+      _pesan('Catatan servis dihapus', kHijau);
+    } on OperasiDitolakException catch (e) {
+      _pesan(e.pesan, kMerah);
+    } on Exception {
+      _pesan('Catatan servis gagal dihapus. Periksa koneksi lalu coba lagi.',
+          kMerah);
+    }
   }
 
   @override
@@ -583,6 +657,7 @@ class _MyAppState extends State<MyApp> {
                   catatan: daftar,
                   onTambah: () => _bukaForm(),
                   onUbah: (c) => _bukaForm(edit: c),
+                  onHapus: _hapus,
                 );
         }
     return LayoutBuilder(builder: (context, kotak) {
@@ -1152,10 +1227,12 @@ class KontenRiwayat extends StatelessWidget {
       {super.key,
       required this.catatan,
       required this.onTambah,
-      required this.onUbah});
+      required this.onUbah,
+      required this.onHapus});
   final List<CatatanServis> catatan;
   final VoidCallback onTambah;
   final ValueChanged<CatatanServis> onUbah;
+  final ValueChanged<CatatanServis> onHapus;
 
   @override
   Widget build(BuildContext context) {
@@ -1225,20 +1302,22 @@ class KontenRiwayat extends StatelessWidget {
                     padding: const EdgeInsets.all(kJarakS),
                     child: Align(
                       alignment: Alignment.centerLeft,
-                      child: SizedBox(
-                        height: 32,
-                        width: 96,
-                        child: OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: kPrimer,
-                            side: const BorderSide(color: kPrimer, width: 2),
-                            textStyle: const TextStyle(fontSize: 12),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(kRadius)),
+                      child: Wrap(
+                        spacing: kJarakS,
+                        children: [
+                          _TombolAksi(
+                            key: Key('ubah-${c.id}'),
+                            label: 'Ubah',
+                            warna: kPrimer,
+                            onPressed: () => onUbah(c),
                           ),
-                          onPressed: () => onUbah(c),
-                          child: const Text('Ubah'),
-                        ),
+                          _TombolAksi(
+                            key: Key('hapus-${c.id}'),
+                            label: 'Hapus',
+                            warna: kMerah,
+                            onPressed: () => onHapus(c),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -1253,8 +1332,10 @@ class KontenRiwayat extends StatelessWidget {
       padding: const EdgeInsets.all(kJarakM),
       itemCount: urutTerbaru.length,
       separatorBuilder: (_, _) => const SizedBox(height: kJarakM),
-      itemBuilder: (_, i) =>
-          KartuRiwayat(catatan: urutTerbaru[i], onUbah: () => onUbah(urutTerbaru[i])),
+      itemBuilder: (_, i) => KartuRiwayat(
+          catatan: urutTerbaru[i],
+          onUbah: () => onUbah(urutTerbaru[i]),
+          onHapus: () => onHapus(urutTerbaru[i])),
     );
   }
 }
@@ -1279,6 +1360,35 @@ class _SelIsi extends StatelessWidget {
         padding: const EdgeInsets.all(kJarakS),
         child: Text(teks,
             style: const TextStyle(fontSize: 14, color: kTeksUtama)),
+      );
+}
+
+/// Tombol aksi ringkas pada tabel Riwayat versi web.
+class _TombolAksi extends StatelessWidget {
+  const _TombolAksi(
+      {super.key,
+      required this.label,
+      required this.warna,
+      required this.onPressed});
+  final String label;
+  final Color warna;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        height: 32,
+        width: 76,
+        child: OutlinedButton(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: warna,
+            side: BorderSide(color: warna, width: 2),
+            textStyle: const TextStyle(fontSize: 12),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(kRadius)),
+          ),
+          onPressed: onPressed,
+          child: Text(label),
+        ),
       );
 }
 
@@ -1376,14 +1486,15 @@ class _HalamanTambahCatatanState extends State<HalamanTambahCatatan> {
       } on Exception catch (e) {
         if (!mounted) return;
         setState(() => _menyimpan = false);
+        final pesan = switch (e) {
+          CatatanDuplikatException() =>
+            'Catatan servis untuk tanggal ini sudah ada',
+          OperasiDitolakException(:final pesan) => pesan,
+          _ => 'Catatan servis gagal disimpan. Periksa koneksi lalu coba lagi.',
+        };
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
-          ..showSnackBar(SnackBar(
-            content: Text(e is CatatanDuplikatException
-                ? 'Catatan servis untuk tanggal ini sudah ada'
-                : 'Catatan servis gagal disimpan. Periksa koneksi lalu coba lagi.'),
-            backgroundColor: kMerah,
-          ));
+          ..showSnackBar(SnackBar(content: Text(pesan), backgroundColor: kMerah));
         return; // form tetap terbuka, isian tidak hilang
       }
     }
