@@ -552,8 +552,8 @@ class _MyAppState extends State<MyApp> {
   }
 
   void _pesan(String teks, Color warna) {
-    _scaffoldKey.currentState!
-      ..hideCurrentSnackBar()
+    _scaffoldKey.currentState
+      ?..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(teks), backgroundColor: warna));
   }
 

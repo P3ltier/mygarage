@@ -200,8 +200,10 @@ class LayananFirestore implements LayananData {
       'tanggal': Timestamp.fromDate(c.tanggal),
       'kilometer': c.kilometer,
       'biaya': c.biaya,
-      'id_kendaraan': c.idKendaraan,
-      'nama_kendaraan': c.namaKendaraan,
+      // Jangan kirim null: kendaraan tidak boleh terhapus bila cache form
+      // belum terisi saat mode Ubah dibuka.
+      if (c.idKendaraan != null) 'id_kendaraan': c.idKendaraan,
+      if (c.namaKendaraan != null) 'nama_kendaraan': c.namaKendaraan,
       'diubah_pada': FieldValue.serverTimestamp(),
     });
   }
