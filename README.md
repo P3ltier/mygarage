@@ -38,7 +38,7 @@ Pemilik kendaraan saat ini mengandalkan nota kertas yang mudah hilang dan ingata
 
 ## Struktur data (Cloud Firestore)
 
-Tiga collection top-level. `kendaraan` disimpan **per pengguna** (punya `id_pengguna`), tipenya dibatasi Mobil/Motor, dan plat nomor dipakai membedakan dua kendaraan yang tipenya sama — mis. dua motor dengan nama sama tetapi plat berbeda. Nama kendaraan **disalin (denormalisasi)** ke setiap catatan servis karena Firestore tidak mendukung JOIN antar-collection.
+Tiga collection top-level. Nama kendaraan **disalin (denormalisasi)** ke setiap catatan servis karena Firestore tidak mendukung JOIN antar-collection.
 
 ```
 users/{uid}                     Doc ID = uid Firebase Authentication
@@ -49,12 +49,12 @@ users/{uid}                     Doc ID = uid Firebase Authentication
   peran:         string
   dibuat_pada:   timestamp
 
-kendaraan/{id_kendaraan}        milik pengguna, di-seed otomatis sekali per akun
+kendaraan/{id_kendaraan}        master data, di-seed otomatis sekali
   id_kendaraan:  string
-  id_pengguna:   string         <- pemilik; kendaraan tidak dipakai bersama
-  nama_kendaraan:string         <- bebas diisi ("Avanza keluarga", "Beat harian")
-  jenis:         string         <- "Mobil" atau "Motor"
-  plat_nomor:    string         <- opsional; membedakan kendaraan bertipe sama
+  nama_kendaraan:string
+  merek:         string
+  tahun:         number
+  plat_nomor:    string
 
 servis/{id_catatan}             Doc ID = id_catatan (string)
   id_catatan:    number
@@ -94,7 +94,7 @@ service cloud.firestore {
 | Berkas | Isi |
 |---|---|
 | `lib/main.dart` | UI: Login, Beranda, Riwayat, Form Tambah/Ubah, navigasi mobile & web |
-| `lib/models.dart` | Model `Pengguna`, `Kendaraan` (nama bebas, tipe Mobil/Motor, plat), `CatatanServis` + `toMap`/`fromMap` |
+| `lib/models.dart` | Model `Pengguna`, `Kendaraan`, `CatatanServis` + `toMap`/`fromMap` |
 | `lib/services/layanan_firestore.dart` | Satu pintu ke database: `LayananData` (abstrak), `LayananFirestore`, `LayananMemori` (untuk widget test tanpa Firebase) |
 | `firestore.rules` | Security Rules yang dipublikasi di Console |
 | `test/` | 40 test: unit aturan validasi, unit auth, form K01–K12, status pengingat, layanan Firestore (F01–F10), golden screenshot |
@@ -113,10 +113,10 @@ Untuk melihat tampilan mobile di browser: Chrome → F12 → Toggle device toolb
 
 ```bash
 flutter analyze   # No issues found
-flutter test      # 43 kasus, semua lulus
+flutter test      # 42 kasus, semua lulus
 ```
 
-Rincian: 5 unit `periksaCatatan` · 3 unit validasi login + pesan galat · 5 widget login L01–L05 · 3 unit `statusPengingat` · 12 widget form K01–K12 · 13 test Firestore F01–F13 · 1 golden screenshot (4 layar 412×917).
+Rincian: 5 unit `periksaCatatan` · 3 unit validasi login + pesan galat · 5 widget login L01–L05 · 3 unit `statusPengingat` · 12 widget form K01–K12 · 12 test Firestore F01–F12 · 1 golden screenshot (4 layar 412×917).
 
 ### Tabel uji Cloud Firestore
 
