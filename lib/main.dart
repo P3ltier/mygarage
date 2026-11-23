@@ -470,14 +470,14 @@ class _MyAppState extends State<MyApp> {
     if (uid == _uid) return;
     _uid = uid;
     _streamPengguna = _layanan.streamPengguna(uid: uid);
-    _streamKendaraan = _layanan.streamKendaraan(uid: uid);
+    _streamKendaraan = _layanan.streamKendaraan();
     _streamCatatan = _layanan.streamCatatanSaya(uid: uid);
     _subKendaraan?.cancel();
     // Panggilan terpisah: .snapshots() Firestore hanya boleh satu listener,
     // sedangkan SapaanBeranda juga mendengarkan stream kendaraan.
     _subKendaraan =
-        _layanan.streamKendaraan(uid: uid).listen((k) => _kendaraanTerkini = k);
-    _layanan.isiKendaraanAwalJikaKosong(uid: uid);
+        _layanan.streamKendaraan().listen((k) => _kendaraanTerkini = k);
+    _layanan.isiKendaraanAwalJikaKosong();
     _layanan.isiCatatanAwalJikaKosong(
         uid: uid, awal: widget.seed ?? seedDefault);
   }
@@ -501,15 +501,6 @@ class _MyAppState extends State<MyApp> {
           edit: edit,
           kendaraan: _kendaraanTerkini,
           simpan: (c) => _layanan.simpanCatatan(c, uid: _uid!),
-          simpanKendaraan: (nama, tipe, plat) async {
-            final k = Kendaraan(
-                idKendaraan: '$_uid-${DateTime.now().millisecondsSinceEpoch}',
-                namaKendaraan: nama,
-                jenis: tipe,
-                platNomor: plat);
-            await _layanan.simpanKendaraan(k, uid: _uid!);
-            return k;
-          },
         ),
       ),
     );
@@ -1114,7 +1105,8 @@ class SapaanBeranda extends StatelessWidget {
                 stream: kendaraan,
                 builder: (context, k) => Text(
                     [
-                      for (final x in k.data ?? const <Kendaraan>[]) x.label,
+                      for (final x in k.data ?? const <Kendaraan>[])
+                        '${x.namaKendaraan} · ${x.merek} ${x.tahun} · ${x.platNomor}',
                     ].join('\n'),
                     style: const TextStyle(fontSize: 12, color: kTeksSekunder)),
               ),
@@ -1295,11 +1287,7 @@ class _SelIsi extends StatelessWidget {
 // ============================================================
 class HalamanTambahCatatan extends StatefulWidget {
   const HalamanTambahCatatan(
-      {super.key,
-      this.edit,
-      this.kendaraan = const [],
-      this.simpan,
-      this.simpanKendaraan});
+      {super.key, this.edit, this.kendaraan = const [], this.simpan});
   final CatatanServis? edit;
 
   /// Pilihan kendaraan dari collection `kendaraan` (bukan isian bebas).
@@ -1308,29 +1296,18 @@ class HalamanTambahCatatan extends StatefulWidget {
   /// null = jalur test: form hanya mengembalikan catatan ke pemanggil.
   final Future<void> Function(CatatanServis)? simpan;
 
-  /// Membuat kendaraan baru dari isian form (nama bebas + tipe + plat).
-  final Future<Kendaraan> Function(String nama, String tipe, String plat)?
-      simpanKendaraan;
-
   @override
   State<HalamanTambahCatatan> createState() => _HalamanTambahCatatanState();
 }
-
-/// Nilai sentinel pada dropdown kendaraan: form menampilkan isian kendaraan baru.
-const String kKendaraanBaru = '__kendaraan_baru__';
 
 class _HalamanTambahCatatanState extends State<HalamanTambahCatatan> {
   final _jenis = TextEditingController();
   final _kilometer = TextEditingController();
   final _biaya = TextEditingController();
-  final _namaKendaraanBaru = TextEditingController();
-  final _platKendaraanBaru = TextEditingController();
   DateTime? _tanggal;
   String? _galatJenis;
   String? _galatBiaya;
-  String? _galatKendaraan;
   String? _idKendaraan;
-  String _tipeKendaraanBaru = Kendaraan.tipe.first;
   bool _menyimpan = false;
 
   @override
@@ -1353,8 +1330,6 @@ class _HalamanTambahCatatanState extends State<HalamanTambahCatatan> {
     _jenis.dispose();
     _kilometer.dispose();
     _biaya.dispose();
-    _namaKendaraanBaru.dispose();
-    _platKendaraanBaru.dispose();
     super.dispose();
   }
 
@@ -1380,30 +1355,9 @@ class _HalamanTambahCatatanState extends State<HalamanTambahCatatan> {
     });
     if (error != null) return; // tetap di form, persis frame kesalahan
     final biaya = int.parse(_biaya.text.trim().replaceAll('.', ''));
-    // Kendaraan: pilih yang sudah ada, atau buat baru dari isian form.
-    Kendaraan? kendaraan;
-    if (_idKendaraan == kKendaraanBaru) {
-      final nama = _namaKendaraanBaru.text.trim();
-      if (nama.isEmpty) {
-        setState(() => _galatKendaraan = 'Nama kendaraan wajib diisi');
-        return;
-      }
-      setState(() => _galatKendaraan = null);
-      final plat = _platKendaraanBaru.text.trim();
-      final buat = widget.simpanKendaraan;
-      kendaraan = buat != null
-          ? await buat(nama, _tipeKendaraanBaru, plat)
-          : Kendaraan(
-              idKendaraan: nama,
-              namaKendaraan: nama,
-              jenis: _tipeKendaraanBaru,
-              platNomor: plat);
-    } else {
-      // nama disalin (denormalisasi) supaya riwayat tak perlu JOIN
-      kendaraan = widget.kendaraan
-          .where((k) => k.idKendaraan == _idKendaraan)
-          .firstOrNull;
-    }
+    final kendaraan = widget.kendaraan
+        .where((k) => k.idKendaraan == _idKendaraan)
+        .firstOrNull; // nama disalin (denormalisasi) supaya tanpa JOIN
     final catatan = CatatanServis(
       jenis: _jenis.text.trim(),
       tanggal: _tanggal ?? DateTime.now(),
@@ -1438,19 +1392,6 @@ class _HalamanTambahCatatanState extends State<HalamanTambahCatatan> {
 
   void _batal() => Navigator.pop(context); // kembali tanpa menyimpan
 
-  // Dropdown memakai gaya yang sama dengan InputField.
-  InputDecoration _dekorasi(String label) => InputDecoration(
-        labelText: label,
-        filled: true,
-        fillColor: kLatar,
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(kRadius),
-            borderSide: const BorderSide(color: kGaris)),
-        enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(kRadius),
-            borderSide: const BorderSide(color: kGaris)),
-      );
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1474,51 +1415,29 @@ class _HalamanTambahCatatanState extends State<HalamanTambahCatatan> {
                 pesanGalat: _galatJenis,
               ),
               const SizedBox(height: kJarakM),
-              if (widget.kendaraan.isNotEmpty ||
-                  widget.simpanKendaraan != null) ...[
+              if (widget.kendaraan.isNotEmpty) ...[
                 DropdownButtonFormField<String>(
                   key: const Key('kendaraan'),
                   initialValue: _idKendaraan,
-                  decoration: _dekorasi('Kendaraan'),
+                  decoration: InputDecoration(
+                    labelText: 'Kendaraan',
+                    filled: true,
+                    fillColor: kLatar,
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(kRadius),
+                        borderSide: const BorderSide(color: kGaris)),
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(kRadius),
+                        borderSide: const BorderSide(color: kGaris)),
+                  ),
                   items: [
                     for (final k in widget.kendaraan)
-                      DropdownMenuItem(value: k.idKendaraan, child: Text(k.label)),
-                    if (widget.simpanKendaraan != null)
-                      const DropdownMenuItem(
-                          value: kKendaraanBaru,
-                          child: Text('+ Tambah kendaraan...')),
+                      DropdownMenuItem(
+                          value: k.idKendaraan,
+                          child: Text('${k.namaKendaraan} · ${k.platNomor}')),
                   ],
                   onChanged: (v) => setState(() => _idKendaraan = v),
                 ),
-                if (_idKendaraan == kKendaraanBaru) ...[
-                  const SizedBox(height: kJarakM),
-                  InputField(
-                    fieldKey: const Key('kendaraan-nama'),
-                    controller: _namaKendaraanBaru,
-                    label: 'Nama Kendaraan',
-                    hint: 'cth: Avanza keluarga',
-                    pesanGalat: _galatKendaraan,
-                  ),
-                  const SizedBox(height: kJarakM),
-                  DropdownButtonFormField<String>(
-                    key: const Key('kendaraan-tipe'),
-                    initialValue: _tipeKendaraanBaru,
-                    decoration: _dekorasi('Tipe Kendaraan'),
-                    items: [
-                      for (final t in Kendaraan.tipe)
-                        DropdownMenuItem(value: t, child: Text(t)),
-                    ],
-                    onChanged: (v) =>
-                        setState(() => _tipeKendaraanBaru = v ?? Kendaraan.tipe.first),
-                  ),
-                  const SizedBox(height: kJarakM),
-                  InputField(
-                    fieldKey: const Key('kendaraan-plat'),
-                    controller: _platKendaraanBaru,
-                    label: 'Plat Nomor',
-                    hint: 'B 1234 XYZ',
-                  ),
-                ],
                 const SizedBox(height: kJarakM),
               ],
               InputField(
