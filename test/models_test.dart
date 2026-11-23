@@ -8,7 +8,7 @@ void main() {
     expect(Pengguna.fromMap(p.toMap()).toMap(), p.toMap());
     expect(Pengguna.fromMap(p.toMap()).peran, 'pemilik');
 
-    final k = daftarKendaraanAwal.first;
+    final k = Kendaraan.awal('u1');
     expect(Kendaraan.fromMap(k.toMap()).toMap(), k.toMap());
 
     final c = CatatanServis(

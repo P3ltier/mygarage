@@ -36,7 +36,7 @@ void main() {
       await tester.pumpWidget(MyApp(sudahMasuk: true, layanan: l));
       await tester.pumpAndSettle();
       expect(find.text('Halo, Jannes'), findsOneWidget);
-      expect(find.text('Mobil Harian · Toyota 2019 · B 1234 XYZ'),
+      expect(find.text('Kendaraan Saya · Mobil'),
           findsOneWidget);
     });
   });
@@ -178,6 +178,49 @@ void main() {
     });
   });
 
+  group('Kendaraan: nama bebas + tipe Mobil/Motor + plat', () {
+    testWidgets('F13 kendaraan baru dibuat dari form dan bisa dipilih lagi',
+        (tester) async {
+      final l = LayananMemori();
+      await tester.pumpWidget(MyApp(
+          sudahMasuk: true, layanan: l, seed: const <CatatanServis>[]));
+      await tester.pumpAndSettle();
+      await plihKendaraanBaru(tester);
+
+      await tester.enterText(
+          find.byKey(const Key('kendaraan-nama')), 'Beat harian');
+      await tester.tap(find.byKey(const Key('kendaraan-tipe')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Motor').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+          find.byKey(const Key('kendaraan-plat')), 'AB 123 CD');
+      await tester.enterText(find.byKey(const Key('jenis')), 'Ganti Oli');
+      await tester.enterText(find.byKey(const Key('biaya')), '75000');
+      await tester.ensureVisible(find.byKey(const Key('simpan')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('simpan')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ganti Oli'), findsOneWidget); // kartu di Riwayat
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+
+      // kendaraan baru ikut tersimpan: muncul lagi sebagai pilihan dropdown
+      await tester.tap(find.byIcon(Icons.home_outlined));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('tambah')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('kendaraan')));
+      await tester.pumpAndSettle();
+      expect(find.text('Beat harian · Motor · AB 123 CD'), findsWidgets);
+      await tester.tap(find.text('Beat harian · Motor · AB 123 CD').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('batal')));
+      await tester.pumpAndSettle();
+    });
+  });
+
   group('Regresi dari uji Chrome', () {
     test('F11 seedDefault punya id unik (dulu 3 catatan menulis ke dokumen yang sama)', () {
       expect(seedDefault.map((c) => c.id).toSet(), hasLength(seedDefault.length));
@@ -188,9 +231,9 @@ void main() {
       // .snapshots() Firestore single-subscription; dulu stream yang sama
       // didengarkan dua kali sehingga baris kendaraan hilang.
       await tester.pumpWidget(MyApp(
-          sudahMasuk: true, layanan: _LayananSatuListener(daftarKendaraanAwal)));
+          sudahMasuk: true, layanan: _LayananSatuListener([Kendaraan.awal(uidUji)])));
       await tester.pumpAndSettle();
-      expect(find.text('Mobil Harian · Toyota 2019 · B 1234 XYZ'),
+      expect(find.text('Kendaraan Saya · Mobil'),
           findsOneWidget);
     });
   });
@@ -212,11 +255,14 @@ class _LayananUji implements LayananData {
       Stream.value(null);
 
   @override
-  Future<void> isiKendaraanAwalJikaKosong() async {}
+  Future<void> isiKendaraanAwalJikaKosong({required String uid}) async {}
 
   @override
-  Stream<List<Kendaraan>> streamKendaraan() =>
-      Stream.value(daftarKendaraanAwal);
+  Stream<List<Kendaraan>> streamKendaraan({required String uid}) =>
+      Stream.value([Kendaraan.awal(uid)]);
+
+  @override
+  Future<void> simpanKendaraan(Kendaraan k, {required String uid}) async {}
 
   @override
   Future<void> isiCatatanAwalJikaKosong(
@@ -246,15 +292,18 @@ class _LayananSatuListener implements LayananData {
       Stream.value(Pengguna(idPengguna: uid, namaLengkap: 'Test', email: 'a@b.c'));
 
   @override
-  Future<void> isiKendaraanAwalJikaKosong() async {}
+  Future<void> isiKendaraanAwalJikaKosong({required String uid}) async {}
 
   @override
-  Stream<List<Kendaraan>> streamKendaraan() {
+  Stream<List<Kendaraan>> streamKendaraan({required String uid}) {
     // single-subscription: listen kedua akan melempar StateError bila stream sama
     final c = StreamController<List<Kendaraan>>();
     c.add(_kendaraan);
     return c.stream;
   }
+
+  @override
+  Future<void> simpanKendaraan(Kendaraan k, {required String uid}) async {}
 
   @override
   Future<void> isiCatatanAwalJikaKosong(
@@ -266,4 +315,14 @@ class _LayananSatuListener implements LayananData {
   @override
   Stream<List<CatatanServis>> streamCatatanSaya({required String uid}) =>
       Stream.value(const <CatatanServis>[]);
+}
+
+/// Buka form lalu pilih '+ Tambah kendaraan...' pada dropdown.
+Future<void> plihKendaraanBaru(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('tambah')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const Key('kendaraan')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('+ Tambah kendaraan...').last);
+  await tester.pumpAndSettle();
 }

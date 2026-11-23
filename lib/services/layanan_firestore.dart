@@ -16,9 +16,12 @@ abstract class LayananData {
   /// Dokumen users/{uid}; null bila belum ada (akun dibuat sebelum Firestore).
   Stream<Pengguna?> streamPengguna({required String uid});
 
-  Future<void> isiKendaraanAwalJikaKosong();
+  /// Kendaraan milik pengguna ini (koleksinya per pengguna, bukan master global).
+  Future<void> isiKendaraanAwalJikaKosong({required String uid});
 
-  Stream<List<Kendaraan>> streamKendaraan();
+  Stream<List<Kendaraan>> streamKendaraan({required String uid});
+
+  Future<void> simpanKendaraan(Kendaraan k, {required String uid});
 
   /// Isi contoh sekali per pengguna agar demo indikator merah tetap bisa
   /// diperagakan pada akun baru.
@@ -70,6 +73,8 @@ class LayananFirestore implements LayananData {
 
   CollectionReference<Map<String, dynamic>> get _servis =>
       _db.collection('servis');
+  CollectionReference<Map<String, dynamic>> get _kendaraan =>
+      _db.collection('kendaraan');
 
   @override
   Future<void> simpanPenggunaSaatLogin({
@@ -93,21 +98,29 @@ class LayananFirestore implements LayananData {
       .map((d) => d.exists ? Pengguna.fromMap(d.data()!) : null);
 
   @override
-  Future<void> isiKendaraanAwalJikaKosong() async {
-    final cek = await _db.collection('kendaraan').limit(1).get();
+  Future<void> isiKendaraanAwalJikaKosong({required String uid}) async {
+    final cek =
+        await _kendaraan.where('id_pengguna', isEqualTo: uid).limit(1).get();
     if (cek.docs.isNotEmpty) return;
-    final batch = _db.batch();
-    for (final k in daftarKendaraanAwal) {
-      batch.set(_db.collection('kendaraan').doc(k.idKendaraan), k.toMap());
-    }
-    await batch.commit();
+    final awal = Kendaraan.awal(uid);
+    await _kendaraan.doc(awal.idKendaraan).set({
+      ...awal.toMap(),
+      'dibuat_pada': FieldValue.serverTimestamp(),
+    });
   }
 
   @override
-  Stream<List<Kendaraan>> streamKendaraan() => _db
-      .collection('kendaraan')
+  Stream<List<Kendaraan>> streamKendaraan({required String uid}) => _kendaraan
+      .where('id_pengguna', isEqualTo: uid)
       .snapshots()
       .map((s) => s.docs.map((d) => Kendaraan.fromMap(d.data())).toList());
+
+  @override
+  Future<void> simpanKendaraan(Kendaraan k, {required String uid}) =>
+      _kendaraan.doc(k.idKendaraan).set({
+        ...k.denganPemilik(uid).toMap(),
+        'dibuat_pada': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
   @override
   Future<void> isiCatatanAwalJikaKosong({
@@ -155,9 +168,10 @@ class LayananFirestore implements LayananData {
 /// Pengganti Firestore saat widget test: semua data di memori.
 class LayananMemori implements LayananData {
   LayananMemori({List<Kendaraan>? kendaraan})
-      : _kendaraan = List.of(kendaraan ?? daftarKendaraanAwal);
+      : _kendaraanAwal = kendaraan;
 
-  final List<Kendaraan> _kendaraan;
+  final List<Kendaraan>? _kendaraanAwal;
+  final _kendaraan = <String, List<Kendaraan>>{}; // per uid
   final _pengguna = <String, Pengguna>{};
   final _catatan = <String, List<CatatanServis>>{}; // per uid
   final _berubah = StreamController<void>.broadcast();
@@ -169,6 +183,9 @@ class LayananMemori implements LayananData {
         final sub = _berubah.stream.listen((_) => s.add(ambil()));
         s.onCancel = sub.cancel;
       });
+
+  List<Kendaraan> _milik(String uid) => _kendaraan.putIfAbsent(
+      uid, () => List.of(_kendaraanAwal ?? [Kendaraan.awal(uid)]));
 
   @override
   Future<void> simpanPenggunaSaatLogin({
@@ -185,11 +202,26 @@ class LayananMemori implements LayananData {
       _pantau(() => _pengguna[uid]);
 
   @override
-  Future<void> isiKendaraanAwalJikaKosong() async {}
+  Future<void> isiKendaraanAwalJikaKosong({required String uid}) async {
+    _milik(uid);
+    _berubah.add(null);
+  }
 
   @override
-  Stream<List<Kendaraan>> streamKendaraan() =>
-      _pantau(() => List.of(_kendaraan));
+  Stream<List<Kendaraan>> streamKendaraan({required String uid}) =>
+      _pantau(() => List.of(_milik(uid)));
+
+  @override
+  Future<void> simpanKendaraan(Kendaraan k, {required String uid}) async {
+    final daftar = _milik(uid);
+    final i = daftar.indexWhere((x) => x.idKendaraan == k.idKendaraan);
+    if (i >= 0) {
+      daftar[i] = k.denganPemilik(uid);
+    } else {
+      daftar.add(k.denganPemilik(uid));
+    }
+    _berubah.add(null);
+  }
 
   @override
   Future<void> isiCatatanAwalJikaKosong({

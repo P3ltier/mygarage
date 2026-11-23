@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Model 3 collection MyGarage — padanan users / rooms / reservations di modul.
-/// Doc ID: users = uid Auth · kendaraan = id_kendaraan · servis = auto-ID.
+/// Doc ID: users = uid Auth · kendaraan = id_kendaraan · servis = id_catatan.
 class Pengguna {
   Pengguna({
     required this.idPengguna,
@@ -35,35 +35,60 @@ class Pengguna {
       );
 }
 
+/// Kendaraan milik pengguna. `jenis` terbatas dua tipe (Motor/Mobil),
+/// `nama_kendaraan` bebas ("Beat harian", "Avanza keluarga"), dan `plat_nomor`
+/// dipakai membedakan dua kendaraan bertipe sama. Merek/tahun tidak disimpan.
 class Kendaraan {
   Kendaraan({
     required this.idKendaraan,
     required this.namaKendaraan,
-    required this.merek,
-    required this.tahun,
-    required this.platNomor,
+    this.jenis = 'Mobil',
+    this.platNomor = '',
+    this.idPengguna,
   });
+
+  static const List<String> tipe = ['Mobil', 'Motor'];
 
   final String idKendaraan;
   final String namaKendaraan;
-  final String merek;
-  final int tahun;
+  final String jenis;
   final String platNomor;
+  final String? idPengguna;
+
+  /// Satu baris untuk dropdown & sapaan Beranda.
+  String get label =>
+      [namaKendaraan, jenis, if (platNomor.isNotEmpty) platNomor].join(' · ');
 
   Map<String, dynamic> toMap() => {
         'id_kendaraan': idKendaraan,
+        if (idPengguna != null) 'id_pengguna': idPengguna,
         'nama_kendaraan': namaKendaraan,
-        'merek': merek,
-        'tahun': tahun,
-        'plat_nomor': platNomor,
+        'jenis': jenis,
+        if (platNomor.isNotEmpty) 'plat_nomor': platNomor,
       };
 
   factory Kendaraan.fromMap(Map<String, dynamic> m) => Kendaraan(
         idKendaraan: m['id_kendaraan'] as String? ?? '',
         namaKendaraan: m['nama_kendaraan'] as String? ?? '',
-        merek: m['merek'] as String? ?? '',
-        tahun: (m['tahun'] as num?)?.toInt() ?? 0,
+        jenis: m['jenis'] as String? ?? 'Mobil',
         platNomor: m['plat_nomor'] as String? ?? '',
+        idPengguna: m['id_pengguna'] as String?,
+      );
+
+  /// Kendaraan awal tiap pengguna baru; nama, tipe, dan plat bisa diubah sendiri.
+  factory Kendaraan.awal(String uid) => Kendaraan(
+        idKendaraan: '$uid-utama',
+        idPengguna: uid,
+        namaKendaraan: 'Kendaraan Saya',
+        jenis: 'Mobil',
+      );
+
+  Kendaraan denganPemilik(String uid) => Kendaraan(
+        idKendaraan: idKendaraan,
+        idPengguna: uid,
+        namaKendaraan: namaKendaraan,
+        jenis: jenis,
+        platNomor: platNomor,
       );
 }
 
@@ -128,14 +153,3 @@ class CatatanServis {
         biaya: biaya,
       );
 }
-
-/// Master data kendaraan yang di-seed sekali saat collection kosong.
-final List<Kendaraan> daftarKendaraanAwal = [
-  Kendaraan(
-    idKendaraan: 'mobil-utama',
-    namaKendaraan: 'Mobil Harian',
-    merek: 'Toyota',
-    tahun: 2019,
-    platNomor: 'B 1234 XYZ',
-  ),
-];
