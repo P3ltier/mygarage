@@ -1,0 +1,116 @@
+{
+  "project": "mygarage-b7458",
+  "diambil": "2026-11-23T10:51:06",
+  "sumber": "Firestore Admin REST (akun pemilik project)",
+  "collections": {
+    "users": [
+      {
+        "id": "RtpeWuitQtOlLidYCsrHUdSwITz2",
+        "email": "uji.a@mygarage.test",
+        "nomor_telepon": "",
+        "nama_lengkap": "Uji A",
+        "id_pengguna": "RtpeWuitQtOlLidYCsrHUdSwITz2",
+        "peran": "pemilik"
+      },
+      {
+        "id": "TbxgSh6gkjWcFdp3jHArSGleMfY2",
+        "nomor_telepon": "",
+        "email": "testmasuk@mygarage.net",
+        "dibuat_pada": "2026-11-22T17:50:57.482Z",
+        "id_pengguna": "TbxgSh6gkjWcFdp3jHArSGleMfY2",
+        "peran": "pemilik",
+        "nama_lengkap": "test"
+      },
+      {
+        "id": "fqerePcbXdMurUTSw9mqSM6lTPK2",
+        "peran": "pemilik",
+        "nomor_telepon": "",
+        "email": "uji.b@mygarage.test",
+        "nama_lengkap": "Uji B",
+        "id_pengguna": "fqerePcbXdMurUTSw9mqSM6lTPK2"
+      },
+      {
+        "id": "oi20bmDqG8eflzXdvDZjBeJFhit1",
+        "peran": "pemilik",
+        "dibuat_pada": "2026-11-22T17:56:40.489Z",
+        "id_pengguna": "oi20bmDqG8eflzXdvDZjBeJFhit1",
+        "nomor_telepon": "",
+        "nama_lengkap": "TESTINGG",
+        "email": "test@mygarage.my"
+      },
+      {
+        "id": "vIemMQZ0TsNivpLvhcUdHxyXeAW2",
+        "id_pengguna": "vIemMQZ0TsNivpLvhcUdHxyXeAW2",
+        "email": "anggaming69@gmail.com",
+        "nama_lengkap": "anggaming69",
+        "peran": "pemilik",
+        "dibuat_pada": "2026-11-23T03:35:34.988Z",
+        "nomor_telepon": ""
+      }
+    ],
+    "kendaraan": [
+      {
+        "id": "mobil-utama",
+        "merek": "Toyota",
+        "tahun": 2019,
+        "plat_nomor": "B 1234 XYZ",
+        "nama_kendaraan": "Mobil Harian",
+        "id_kendaraan": "mobil-utama"
+      }
+    ],
+    "servis": [
+      {
+        "id": "1795369857064000",
+        "biaya": 900000,
+        "dibuat_pada": "2026-11-22T17:50:57.539Z",
+        "kilometer": null,
+        "id_catatan": 1795369857064000,
+        "jenis": "Ganti Aki",
+        "tanggal": "2026-05-04T17:00:00Z",
+        "id_pengguna": "TbxgSh6gkjWcFdp3jHArSGleMfY2"
+      },
+      {
+        "id": "1795369927044000",
+        "jenis": "oli mesin",
+        "dibuat_pada": "2026-11-22T17:52:07.210Z",
+        "tanggal": "2026-11-22T17:00:00Z",
+        "biaya": 564000,
+        "id_kendaraan": "mobil-utama",
+        "id_catatan": 1795369927044000,
+        "kilometer": 77467,
+        "nama_kendaraan": "Mobil Harian",
+        "id_pengguna": "TbxgSh6gkjWcFdp3jHArSGleMfY2"
+      },
+      {
+        "id": "20260505",
+        "tanggal": "2026-05-04T17:00:00Z",
+        "dibuat_pada": "2026-11-23T03:35:35.048Z",
+        "id_catatan": 20260505,
+        "biaya": 900000,
+        "kilometer": null,
+        "id_pengguna": "vIemMQZ0TsNivpLvhcUdHxyXeAW2",
+        "jenis": "Ganti Aki"
+      },
+      {
+        "id": "20260620",
+        "jenis": "Balancing Ban",
+        "id_pengguna": "vIemMQZ0TsNivpLvhcUdHxyXeAW2",
+        "biaya": 100000,
+        "kilometer": null,
+        "dibuat_pada": "2026-11-23T03:35:35.048Z",
+        "tanggal": "2026-06-19T17:00:00Z",
+        "id_catatan": 20260620
+      },
+      {
+        "id": "20260712",
+        "kilometer": null,
+        "biaya": 250000,
+        "id_pengguna": "vIemMQZ0TsNivpLvhcUdHxyXeAW2",
+        "jenis": "Ganti Oli Mesin",
+        "tanggal": "2026-07-11T17:00:00Z",
+        "dibuat_pada": "2026-11-23T03:35:35.048Z",
+        "id_catatan": 20260712
+      }
+    ]
+  }
+}
