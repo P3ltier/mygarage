@@ -47,23 +47,23 @@ void main() {
       final l = LayananMemori();
       await l.simpanCatatan(
           CatatanServis(
-              jenis: 'Ganti Oli', tanggal: DateTime(2026, 7, 12), biaya: 1),
+              id: 1, jenis: 'Ganti Oli', tanggal: DateTime(2026, 7, 12), biaya: 1),
           uid: 'u1');
       await expectLater(
-          () => l.simpanCatatan(
+          l.simpanCatatan(
               CatatanServis(
-                  jenis: '  ganti OLI ',
+                  id: 2, jenis: '  ganti OLI ',
                   tanggal: DateTime(2026, 7, 12),
                   biaya: 2),
               uid: 'u1'),
           throwsA(isA<CatatanDuplikatException>()));
       await l.simpanCatatan(
           CatatanServis(
-              jenis: 'Ganti Oli', tanggal: DateTime(2026, 7, 13), biaya: 3),
+              id: 3, jenis: 'Ganti Oli', tanggal: DateTime(2026, 7, 13), biaya: 3),
           uid: 'u1');
       await l.simpanCatatan(
           CatatanServis(
-              jenis: 'Ganti Oli', tanggal: DateTime(2026, 7, 12), biaya: 4),
+              id: 4, jenis: 'Ganti Oli', tanggal: DateTime(2026, 7, 12), biaya: 4),
           uid: 'u2');
       expect(await l.streamCatatanSaya(uid: 'u1').first, hasLength(2));
       expect(await l.streamCatatanSaya(uid: 'u2').first, hasLength(1));
